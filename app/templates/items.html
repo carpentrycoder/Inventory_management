@@ -1,0 +1,655 @@
+{% extends "base.html" %}
+{% set active = "items" %}
+
+{% block title %}Items{% endblock %}
+{% block page_title %}Items{% endblock %}
+
+{% block topbar_actions %}
+<div class="search-wrap">
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+    <circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5L14 14"/>
+  </svg>
+  <input class="search-input" type="text" id="search-input" placeholder="Search items…" oninput="applyFilters()">
+</div>
+<select class="form-select" id="filter-stock" onchange="applyFilters()" style="margin-left:10px;min-width:140px">
+  <option value="">All Stock</option>
+  <option value="low">Low Stock</option>
+  <option value="out">Out of Stock</option>
+</select>
+<select class="form-select" id="filter-category" onchange="applyFilters()" style="margin-left:10px;min-width:160px"></select>
+<button class="btn btn-primary btn-sm" onclick="openModal()" style="margin-left:auto">
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5">
+    <path d="M8 2v12M2 8h12"/>
+  </svg>
+  Add item
+</button>
+{% endblock %}
+
+{% block content %}
+<style>
+.kpi-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.kpi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  min-width: 120px;
+  flex: 1;
+}
+.kpi-card b { font-size: 20px; color: var(--accent); display: block; margin-bottom: 4px; }
+.analytics-section {
+  display: flex;
+  gap: 24px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.timeline-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  flex: 0 1 400px;
+  min-width: 300px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+.chart-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  flex: 1;
+  min-width: 300px;
+  height: 300px;
+}
+.chart-box canvas {
+  max-height: 260px;
+}
+.timeline-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.timeline-item:last-child { border-bottom: none; }
+.timeline-item b { display: block; margin-bottom: 4px; color: var(--text); word-break: break-word; }
+.timeline-item span { color: var(--text2); display: block; margin-bottom: 4px; }
+.timeline-item div { color: var(--text3); font-size: 12px; }
+.btn-green {
+  background: rgba(212,245,100,0.12);
+  color: var(--accent);
+  border: 1px solid transparent;
+}
+.btn-green:hover { background: rgba(212,245,100,0.2); }
+.btn-orange {
+  background: var(--amber-dim);
+  color: var(--amber);
+  border: 1px solid transparent;
+}
+.btn-orange:hover { background: rgba(255,187,85,0.2); }
+@media (max-width: 1200px) {
+  .analytics-section {
+    flex-direction: column;
+  }
+  .timeline-box, .chart-box {
+    width: 100%;
+  }
+}
+</style>
+<div id="items-analytics" class="kpi-bar"></div>
+<div class="table-wrap">
+  <div id="items-summary" style="margin-bottom:15px;font-size:20px;color:var(--text2);padding:19px 19px;"></div>
+  <div id="items-container">
+    <div class="loading-state"><div class="spinner"></div> Loading items…</div>
+  </div>
+</div>
+<div class="analytics-section">
+  <div id="stock-timeline" class="timeline-box"></div>
+  <div id="stock-chart" class="chart-box" style="margin-bottom: 19px;">
+    <h3 style="margin-top:0;margin-bottom:19px; font-size:14px;color:var(--text);">Stock Trend</h3>
+    <canvas id="stockChartCanvas"></canvas>
+  </div>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 class="modal-title" id="modal-title">Add item</h2>
+    <input type="hidden" id="item-id">
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input class="form-input" id="item-name" placeholder="e.g. Wireless Keyboard">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input class="form-input" id="item-desc" placeholder="Optional description">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label class="form-label">Quantity</label>
+        <input class="form-input" id="item-qty" type="number" min="0" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Price</label>
+        <input class="form-input" id="item-price" type="number" step="0.01" min="0" placeholder="0.00">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-select" id="item-category"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Supplier</label>
+      <select class="form-select" id="item-supplier"></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveItem()">Save item</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="modal-overlay" id="del-modal">
+  <div class="modal" style="max-width:360px">
+    <h2 class="modal-title">Delete item?</h2>
+    <p style="font-size:13.5px;color:var(--text2)">This action cannot be undone. The item will be permanently removed.</p>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDelModal()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-del-btn" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allItems = [], allCats = [], allSuppliers = [], allMovements = [], deleteId = null;
+let currentSort = { key: null, asc: true };
+let stockChart = null;
+
+function esc(s) {
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadItems() {
+  document.getElementById('items-summary').innerHTML = '';
+  document.getElementById('items-container').innerHTML = `
+    <div class="skeleton-row"></div>
+    <div class="skeleton-row"></div>
+    <div class="skeleton-row"></div>
+  `;
+
+  try {
+    const [items, analytics, movements, categories, suppliers] = await Promise.all([
+      apiFetch('/inventory/items/'),
+      apiFetch('/inventory/items/analytics/summary'),
+      apiFetch('/inventory/stock-movements'),
+      apiFetch('/inventory/categories/'),
+      apiFetch('/inventory/suppliers/')
+    ]);
+    allItems = items;
+    allCats = categories;
+    allSuppliers = suppliers;
+    allMovements = movements;
+    populateCategoryFilter();
+    renderAnalytics(analytics);
+    renderSummary(items);
+    renderTable(items);
+    loadTimeline(movements);
+  } catch(e) {
+    toast('Failed: ' + e.message, 'error');
+    document.getElementById('items-container').innerHTML = '<div class="empty-state">Unable to load items.</div>';
+  }
+}
+
+function catName(id) { return allCats.find(c => c.id === id)?.name || '—'; }
+function supName(id) { return allSuppliers.find(s => s.id === id)?.name || '—'; }
+
+function stockBadge(qty) {
+  if ((qty || 0) === 0) return '<span class="badge badge-red">Out</span>';
+  if ((qty || 0) < 10) return '<span class="badge badge-orange">Low</span>';
+  return '<span class="badge badge-green">OK</span>';
+}
+
+function renderAnalytics(data) {
+  const total = data.total_items || 0;
+  const low = data.low_stock_count || 0;
+  const totalQty = data.total_quantity || 0;
+  const totalValue = data.total_value || 0;
+
+  document.getElementById('items-analytics').innerHTML = `
+    <div class="kpi-card">Items<br><b>${total}</b></div>
+    <div class="kpi-card">Low Stock<br><b>${low}</b></div>
+    <div class="kpi-card">Total Qty<br><b>${totalQty}</b></div>
+    <div class="kpi-card">Inventory Value<br><b>₹${totalValue.toFixed(2)}</b></div>
+  `;
+}
+
+function loadTimeline(data) {
+  document.getElementById('stock-timeline').innerHTML = `
+    <h3 style="margin-bottom:15px;font-size:16px;color:var(--text);">Recent Stock Movements</h3>
+    ${data.slice(0, 10).map(t => `
+      <div class="timeline-item">
+        <b>${esc(t.item_name || 'Unknown')}</b>
+        <span style="color:${t.type === 'IN' ? 'var(--accent)' : 'var(--red)'}">${t.type === 'IN' ? 'Stock In' : 'Stock Out'} ${t.quantity} units</span>
+        <div style="font-size:12px;color:var(--text3);font-family:var(--font-mono);">${new Date(t.timestamp).toLocaleString()}</div>
+      </div>
+    `).join('')}
+  `;
+
+  // Render line chart
+  renderStockChart(data);
+}
+
+function renderStockChart(data) {
+  // Destroy existing chart if it exists
+  if (stockChart) {
+    stockChart.destroy();
+    stockChart = null;
+  }
+
+  // Wait for canvas to be available
+  const canvasEl = document.getElementById('stockChartCanvas');
+  if (!canvasEl) {
+    return;
+  }
+
+  const ctx = canvasEl.getContext('2d');
+  const sortedData = data.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const labels = [];
+  const balances = [];
+  let balance = 0;
+
+  if (sortedData.length === 0) {
+    return;
+  }
+
+  sortedData.forEach(t => {
+    balance += t.type === 'IN' ? t.quantity : -t.quantity;
+    labels.push(new Date(t.timestamp).toLocaleDateString());
+    balances.push(balance);
+  });
+
+  stockChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Stock Level',
+        data: balances,
+        borderColor: '#d4f564',
+        backgroundColor: '#d4f56420',
+        fill: true,
+        tension: 0.2,
+        borderWidth: 2.5,
+        pointBackgroundColor: '#d4f564',
+        pointBorderColor: '#d4f564'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          display: false
+        },
+        filler: {
+          propagate: true
+        }
+      },
+      scales: {
+        x: {
+          display: true,
+          grid: {
+            display: false
+          },
+          ticks: {
+            color: '#55533d',
+            font: {
+              size: 11,
+              family: "'DM Sans', sans-serif"
+            },
+            maxRotation: 45,
+            minRotation: 0
+          }
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: 'rgba(255,255,255,0.07)',
+            drawBorder: false
+          },
+          ticks: {
+            color: '#55533d',
+            font: {
+              size: 11,
+              family: "'DM Sans', sans-serif"
+            }
+          }
+        }
+      },
+      elements: {
+        point: {
+          radius: 0,
+          hitRadius: 30,
+          hoverRadius: 5
+        }
+      }
+    }
+  });
+}
+
+function renderSummary(items) {
+  const total = items.length;
+  const qty = items.reduce((s, i) => s + (i.quantity || 0), 0);
+  const value = items.reduce((s, i) => s + ((i.quantity || 0) * (i.price || 0)), 0);
+
+  document.getElementById('items-summary').innerHTML = `
+    ${total} items • ${qty} units • ₹${value.toFixed(2)}
+  `;
+}
+
+function renderTable(items) {
+  renderSummary(items);
+
+  if (items.length === 0) {
+    document.getElementById('items-container').innerHTML = `
+      <div class="empty-state">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;margin:0 auto">
+          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        <p>No items match your filters.</p>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('items-container').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Qty</th>
+          <th>Price</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map(it => `
+          <tr onclick="openLedger(${it.id}, '${esc(it.name)}')">
+            <td><b>${esc(it.name)}</b></td>
+            <td>${it.quantity}</td>
+            <td>₹${it.price.toFixed(2)}</td>
+            <td>${stockBadge(it.quantity)}</td>
+            <td>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-sm btn-green" onclick="event.stopPropagation(); quickStockIn(${it.id})">+</button>
+                <button class="btn btn-sm btn-orange" onclick="event.stopPropagation(); quickStockOut(${it.id})">−</button>
+                <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); editItem(${it.id})">Edit</button>
+                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); askDelete(${it.id})">Del</button>
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function applyFilters() {
+  let data = [...allItems];
+
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const stockFilter = document.getElementById('filter-stock').value;
+  const catFilter = document.getElementById('filter-category').value;
+
+  if (search) {
+    data = data.filter(it =>
+      it.name.toLowerCase().includes(search) ||
+      (it.description || '').toLowerCase().includes(search)
+    );
+  }
+
+  if (stockFilter === 'low') {
+    data = data.filter(it => (it.quantity || 0) < 10 && (it.quantity || 0) > 0);
+  }
+  if (stockFilter === 'out') {
+    data = data.filter(it => (it.quantity || 0) === 0);
+  }
+
+  if (catFilter) {
+    data = data.filter(it => it.category_id == catFilter);
+  }
+
+  if (currentSort.key) {
+    data.sort((a, b) => {
+      const valA = a[currentSort.key] ?? '';
+      const valB = b[currentSort.key] ?? '';
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return currentSort.asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      if (valA < valB) return currentSort.asc ? -1 : 1;
+      if (valA > valB) return currentSort.asc ? 1 : -1;
+      return 0;
+    });
+  }
+
+  renderTable(data);
+  updateTimelineAndChart(data);
+}
+
+function updateTimelineAndChart(filteredItems) {
+  // Filter stock movements to only show movements for the filtered items
+  const filteredItemIds = filteredItems.map(it => it.id);
+  const filteredMovements = allMovements.filter(m => filteredItemIds.includes(m.item_id));
+  
+  // Update timeline and chart with filtered movements
+  loadTimeline(filteredMovements);
+}
+
+function sortBy(key) {
+  currentSort.asc = currentSort.key === key ? !currentSort.asc : true;
+  currentSort.key = key;
+  applyFilters();
+}
+
+function populateSelects() {
+  const catSel = document.getElementById('item-category');
+  const supSel = document.getElementById('item-supplier');
+  catSel.innerHTML = '<option value="">— Select category —</option>' +
+    allCats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  supSel.innerHTML = '<option value="">— Select supplier —</option>' +
+    allSuppliers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+}
+
+function populateCategoryFilter() {
+  const filter = document.getElementById('filter-category');
+  filter.innerHTML = '<option value="">All categories</option>' +
+    allCats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+}
+
+function openModal(item) {
+  populateSelects();
+  if (item) {
+    document.getElementById('modal-title').textContent = 'Edit item';
+    document.getElementById('item-id').value    = item.id;
+    document.getElementById('item-name').value  = item.name || '';
+    document.getElementById('item-desc').value  = item.description || '';
+    document.getElementById('item-qty').value   = item.quantity ?? '';
+    document.getElementById('item-price').value = item.price ?? '';
+    document.getElementById('item-category').value = item.category_id || '';
+    document.getElementById('item-supplier').value = item.supplier_id || '';
+  } else {
+    document.getElementById('modal-title').textContent = 'Add item';
+    document.getElementById('item-id').value = '';
+    ['item-name','item-desc','item-qty','item-price'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('item-category').value = '';
+    document.getElementById('item-supplier').value = '';
+  }
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('item-name').focus();
+}
+
+function editItem(id) {
+  const item = allItems.find(i => i.id === id);
+  if (item) openModal(item);
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+async function saveItem() {
+  const id = document.getElementById('item-id').value;
+  const body = {
+    name: document.getElementById('item-name').value.trim(),
+    description: document.getElementById('item-desc').value.trim() || null,
+    quantity: parseInt(document.getElementById('item-qty').value) || 0,
+    price: parseFloat(document.getElementById('item-price').value) || 0,
+    category_id: parseInt(document.getElementById('item-category').value) || null,
+    supplier_id: parseInt(document.getElementById('item-supplier').value) || null,
+  };
+  if (!body.name) { toast('Name is required', 'error'); return; }
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    if (id) {
+      await apiFetch('/inventory/items/' + id, { method: 'PUT', body: JSON.stringify(body) });
+      toast('Item updated');
+    } else {
+      await apiFetch('/inventory/items/', { method: 'POST', body: JSON.stringify(body) });
+      toast('Item created');
+    }
+    closeModal();
+    loadItems();
+  } catch(e) { toast(e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Save item';
+}
+
+function askDelete(id) {
+  deleteId = id;
+  document.getElementById('del-modal').classList.add('open');
+}
+function closeDelModal() {
+  deleteId = null;
+  document.getElementById('del-modal').classList.remove('open');
+}
+async function confirmDelete() {
+  if (!deleteId) return;
+  try {
+    await apiFetch('/inventory/items/' + deleteId, { method: 'DELETE' });
+    toast('Item deleted');
+    closeDelModal();
+    loadItems();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function quickStockIn(itemId) {
+  const qty = prompt('Add quantity:');
+  if (!qty) return;
+
+  try {
+    await apiFetch(`/inventory/stock-in?item_id=${itemId}&quantity=${qty}&user_id=1`, {
+      method: 'POST'
+    });
+    toast('Stock added');
+    loadItems();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function quickStockOut(itemId) {
+  const qty = prompt('Remove quantity:');
+  if (!qty) return;
+
+  try {
+    await apiFetch(`/inventory/stock-out?item_id=${itemId}&quantity=${qty}&user_id=1`, {
+      method: 'POST'
+    });
+    toast('Stock removed');
+    loadItems();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function openLedger(itemId, name) {
+  try {
+    const data = await apiFetch(`/inventory/items/${itemId}/ledger`);
+    const modalEl = document.getElementById('modal');
+    const modalBody = modalEl?.querySelector('.modal');
+    if (!modalBody) {
+      throw new Error('Modal body not found');
+    }
+
+    modalBody.innerHTML = `
+      <h2 class="modal-title">${name} - Ledger</h2>
+      <div style="max-height:400px;overflow-y:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:var(--bg3);">
+              <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);font-family:var(--font-mono);border-bottom:1px solid var(--border);">Type</th>
+              <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);font-family:var(--font-mono);border-bottom:1px solid var(--border);">Qty</th>
+              <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);font-family:var(--font-mono);border-bottom:1px solid var(--border);">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.map(l => `
+              <tr>
+                <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:13.5px;color:var(--text2);">${l.type}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:13.5px;color:var(--text2);">${l.qty}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:13.5px;color:var(--text2);">${l.running_balance}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+      </div>
+    `;
+    modalEl.classList.add('open');
+  } catch(e) { toast('Failed to load ledger: ' + e.message, 'error'); }
+}
+
+async function editQty(id, current) {
+  const newQty = prompt('Update quantity:', current);
+  if (newQty === null) return;
+
+  try {
+    await apiFetch('/inventory/items/' + id, {
+      method: 'PUT',
+      body: JSON.stringify({ quantity: parseInt(newQty) })
+    });
+    toast('Updated');
+    loadItems();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// Close modal on overlay click
+const modalOverlay = document.getElementById('modal');
+const delModalOverlay = document.getElementById('del-modal');
+if (modalOverlay) {
+  modalOverlay.addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+}
+if (delModalOverlay) {
+  delModalOverlay.addEventListener('click', e => { if (e.target === e.currentTarget) closeDelModal(); });
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'n') {
+    e.preventDefault();
+    openModal();
+  }
+  if (e.key === '/') {
+    e.preventDefault();
+    document.getElementById('search-input').focus();
+  }
+});
+
+loadItems();
+setInterval(loadItems, 20000);
+</script>
+{% endblock %}

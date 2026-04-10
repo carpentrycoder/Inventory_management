@@ -1,0 +1,882 @@
+{% extends "base.html" %}
+{% set active = "dashboard" %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block topbar_actions %}
+<span id="last-refresh" style="font-size:12px;color:var(--text3);font-family:var(--font-mono)"></span>
+<button class="btn btn-ghost btn-sm" onclick="loadAll()">
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.7 0 3.2.8 4.2 2"/>
+    <path d="M14 2v4h-4"/>
+  </svg>
+  Refresh
+</button>
+{% endblock %}
+
+{% block head %}
+<style>
+  .stat-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 22px 22px 18px;
+    display: flex; flex-direction: column; gap: 6px;
+    transition: border-color 0.2s;
+    cursor: default;
+  }
+  .stat-card:hover { border-color: var(--border-hover); }
+  .stat-card-label {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text3);
+    font-family: var(--font-mono);
+  }
+  .stat-card-value {
+    font-family: var(--font-head); font-size: 34px; font-weight: 800;
+    line-height: 1; color: var(--text);
+  }
+  .stat-card-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .stat-card-accent .stat-card-value { color: var(--accent); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 24px; }
+  @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
+
+  .section-title {
+    font-family: var(--font-head); font-weight: 700; font-size: 13px;
+    color: var(--text2); letter-spacing: 0.03em;
+    margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-title a { font-size: 12px; color: var(--accent); text-decoration: none; font-family: var(--font-mono); }
+
+  .mini-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .mini-row:last-child { border-bottom: none; }
+  .mini-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); flex-shrink: 0;
+  }
+  .mini-name { flex: 1; font-size: 13.5px; color: var(--text); }
+  .mini-qty { font-family: var(--font-mono); font-size: 12px; color: var(--text3); }
+
+  .chart-container { height: 220px; position: relative; }
+  .filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .filters-grid input,
+  .filters-grid select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    color: var(--text);
+    border-radius: 10px;
+  }
+  .dashboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    color: var(--text);
+  }
+  .dashboard-table th,
+  .dashboard-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    font-size: 13px;
+  }
+  .dashboard-table th {
+    color: var(--text2);
+    font-weight: 600;
+  }
+  .dashboard-table tbody tr:hover {
+    background: rgba(255,255,255,0.03);
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+  }
+  .summary-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Stats row -->
+<div class="stats-grid" id="stats-grid">
+  <div class="stat-card">
+    <div class="stat-card-label">Total items</div>
+    <div class="stat-card-value" id="s-items">—</div>
+    <div class="stat-card-sub">across all categories</div>
+  </div>
+  <div class="stat-card stat-card-accent">
+    <div class="stat-card-label">Total stock</div>
+    <div class="stat-card-value" id="s-qty">—</div>
+    <div class="stat-card-sub">units in inventory</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-card-label">Categories</div>
+    <div class="stat-card-value" id="s-cats">—</div>
+    <div class="stat-card-sub">product groups</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-card-label">Suppliers</div>
+    <div class="stat-card-value" id="s-suppliers">—</div>
+    <div class="stat-card-sub">vendor partners</div>
+  </div>
+</div>
+
+<!-- Alerts Section -->
+<div id="alerts-section" style="margin-top: 20px; display: none;">
+  <div class="card" style="padding: 16px; background: var(--red-dim); border-color: var(--red);">
+    <div class="section-title" style="color: var(--red); margin-bottom: 8px;">
+      ⚠️ Inventory Alerts
+    </div>
+    <div id="alerts-content"></div>
+  </div>
+</div>
+
+<div class="summary-grid">
+  <div class="summary-card" id="summaryCard">
+    <div class="section-title">Inventory Summary</div>
+    <div>Loading summary…</div>
+  </div>
+  <div class="summary-card" id="insightCard">
+    <div class="section-title">Key Insights</div>
+    <div>Loading insights…</div>
+  </div>
+</div>
+
+<div class="two-col" style="margin-top: 20px;">
+  <!-- Recent items -->
+  <div class="card" style="padding:20px">
+    <div class="section-title">
+      Recent items
+      <a href="/ui/items">View all →</a>
+    </div>
+    <div id="recent-items">
+      <div class="loading-state"><div class="spinner"></div> Loading…</div>
+    </div>
+  </div>
+
+  <!-- Top quantity chart -->
+  <div class="card" style="padding:20px">
+    <div class="section-title">
+      Top items by quantity
+      <a href="/ui/items">Insights →</a>
+    </div>
+    <div class="chart-container">
+      <canvas id="qtyChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="two-col" style="margin-top: 20px;">
+  <!-- Categories breakdown -->
+  <div class="card" style="padding:20px">
+    <div class="section-title">
+      Stock by category
+      <a href="/ui/categories">Manage →</a>
+    </div>
+    <div class="chart-container">
+      <canvas id="categoryChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Trend chart -->
+  <div class="card" style="padding:20px">
+    <div class="section-title">
+      Quantity & value trend
+      <a href="/ui/items">Trend →</a>
+    </div>
+    <div class="chart-container">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Stock Movements Chart -->
+<div class="card" style="padding:20px; margin-top: 20px;">
+  <div class="section-title">
+    Stock Movements (Last 30 days)
+  </div>
+  <div class="chart-container">
+    <canvas id="movementsChart"></canvas>
+  </div>
+</div>
+
+<div class="card" style="padding:20px; margin-top: 20px;">
+  <div class="section-title">Inventory table & filters</div>
+  <div class="filters-grid">
+    <input id="search" type="text" placeholder="Search items or description" oninput="renderTable()" />
+    <select id="filterCategory" onchange="renderTable()">
+      <option value="">All categories</option>
+    </select>
+    <select id="filterSupplier" onchange="renderTable()">
+      <option value="">All suppliers</option>
+    </select>
+    <input id="minQty" type="number" placeholder="Min qty" oninput="renderTable()" />
+    <input id="maxQty" type="number" placeholder="Max qty" oninput="renderTable()" />
+    <input id="minPrice" type="number" placeholder="Min price" oninput="renderTable()" />
+    <input id="maxPrice" type="number" placeholder="Max price" oninput="renderTable()" />
+    <input id="filterDate" type="date" onchange="renderTable()" />
+    <button class="btn btn-ghost" type="button" onclick="resetFilters()">Reset filters</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="dashboard-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Quantity</th>
+          <th>Price</th>
+          <th>Category</th>
+          <th>Supplier</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr><td colspan="7">Loading data…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 🔥 1. MAIN DASHBOARD STATE (GLOBAL STORE)
+let DASHBOARD_DATA = {
+  items: [],
+  categories: [],
+  suppliers: [],
+  transactions: []
+};
+let trendChartInstance = null;
+let qtyChartInstance = null;
+let categoryChartInstance = null;
+let movementsChartInstance = null;
+
+// 🔥 2. MAIN LOAD FUNCTION (UPDATED)
+async function loadAll() {
+  document.getElementById('last-refresh').textContent = 'Refreshing...';
+
+  try {
+    const [items, cats, suppliers, transactions] = await Promise.all([
+      apiFetch('/inventory/items/'),
+      apiFetch('/inventory/categories/'),
+      apiFetch('/inventory/suppliers/'),
+      apiFetch('/inventory/stock-movements')
+    ]);
+
+    console.log('API results:', { items, cats, suppliers, transactions });
+
+    // Validate data before proceeding - check if all are valid arrays
+    const isValid = (data) => data != null && Array.isArray(data);
+    if (!isValid(items) || !isValid(cats) || !isValid(suppliers) || !isValid(transactions)) {
+      console.error('Invalid API responses - expected arrays:', { items, cats, suppliers, transactions });
+      throw new Error('Failed to load dashboard data - APIs did not return valid arrays');
+    }
+
+    DASHBOARD_DATA = { items, cats, suppliers, transactions };
+
+    console.log('DASHBOARD_DATA set:', DASHBOARD_DATA);
+
+    calculateKPIs();
+    renderRecentItems();
+    renderCharts();
+    renderTrendChart();
+    renderAlerts();
+    populateFilterSelects();
+    renderTable();
+    renderAnalytics();
+    renderMovementsChart();
+
+    document.getElementById('last-refresh').textContent =
+      'Updated ' + new Date().toLocaleTimeString();
+
+  } catch (e) {
+    console.error('Dashboard load error:', e);
+    toast('Dashboard load failed: ' + e.message, 'error');
+    document.getElementById('last-refresh').textContent = 'Error loading data';
+  }
+}
+
+// 📊 3. KPI CALCULATIONS (CORE INTELLIGENCE ENGINE)
+function calculateKPIs() {
+  const { items, cats: categories, suppliers, transactions } = DASHBOARD_DATA;
+
+  // Total Items
+  const totalItems = items.length;
+
+  // Total Stock
+  const totalStock = items.reduce((s, i) => s + (i.quantity || 0), 0);
+
+  // Inventory Value
+  const inventoryValue = items.reduce(
+    (s, i) => s + (i.quantity || 0) * (i.price || 0),
+    0
+  );
+
+  // Low Stock
+  const lowStockItems = items.filter(i => (i.quantity || 0) < 10).length;
+
+  // Out of Stock
+  const outOfStock = items.filter(i => (i.quantity || 0) === 0).length;
+
+  // Stock IN / OUT
+  const stockIn = transactions
+    .filter(t => t.type === "IN")
+    .reduce((s, t) => s + (t.quantity || 0), 0);
+
+  const stockOut = transactions
+    .filter(t => t.type === "OUT")
+    .reduce((s, t) => s + (t.quantity || 0), 0);
+
+  // Category count
+  const categoryCount = categories.length;
+
+  // UI Binding
+  bindKPI("s-items", totalItems);
+  bindKPI("s-qty", totalStock.toLocaleString());
+  bindKPI("s-cats", categoryCount);
+  bindKPI("s-suppliers", suppliers.length);
+
+  // 🔥 EXTRA KPIs (optional if you add cards later)
+  // console.log({
+  //   inventoryValue,
+  //   lowStockItems,
+  //   outOfStock,
+  //   stockIn,
+  //   stockOut
+  // });
+}
+
+// 🔧 4. KPI UI BINDING HELPER
+function bindKPI(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function populateFilterSelects() {
+  const { cats: categories, suppliers } = DASHBOARD_DATA;
+  const categorySelect = document.getElementById('filterCategory');
+  const supplierSelect = document.getElementById('filterSupplier');
+
+  if (!categorySelect || !supplierSelect) return;
+
+  categorySelect.innerHTML = '<option value="">All categories</option>' +
+    categories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  supplierSelect.innerHTML = '<option value="">All suppliers</option>' +
+    suppliers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+}
+
+// 🆕 5. RECENT ITEMS RENDER (IMPROVED LOGIC)
+function renderRecentItems() {
+  const items = [...DASHBOARD_DATA.items].slice(-6).reverse();
+
+  const container = document.getElementById('recent-items');
+
+  if (!items.length) {
+    container.innerHTML = `<div class="empty-state">No items yet</div>`;
+    return;
+  }
+
+  container.innerHTML = items.map(it => `
+    <div class="mini-row">
+      <div class="mini-dot"></div>
+      <div class="mini-name">${esc(it.name)}</div>
+      <div class="mini-qty">${it.quantity || 0} units</div>
+      <span class="badge badge-green">₹${(it.price || 0).toFixed(2)}</span>
+    </div>
+  `).join('');
+}
+
+// 📊 6. CATEGORY CHART (UPGRADED VERSION)
+function renderCategoryChart() {
+  const { items, cats: categories, suppliers, transactions } = DASHBOARD_DATA;
+
+  const catMap = {};
+  categories.forEach(c => catMap[c.id] = c.name);
+
+  const catQty = {};
+  const catValue = {};
+
+  items.forEach(it => {
+    const name = catMap[it.category_id] || "Uncategorised";
+
+    catQty[name] = (catQty[name] || 0) + (it.quantity || 0);
+    catValue[name] = (catValue[name] || 0) + ((it.quantity || 0) * (it.price || 0));
+  });
+
+  const sorted = Object.entries(catQty)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8);
+
+  const labels = sorted.map(([name]) => name);
+  const data = sorted.map(([, qty]) => qty);
+
+  const ctx = document.getElementById('categoryChart');
+  if (!ctx) return;
+
+  // Destroy existing chart if it exists
+  if (window.categoryChartInstance) {
+    window.categoryChartInstance.destroy();
+  }
+
+  window.categoryChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: [
+          '#d4f564', '#6bb5ff', '#ff6b6b', '#ffbb55', '#a8e040',
+          '#6b5bff', '#ff6b9b', '#55ffbb'
+        ],
+        borderWidth: 2,
+        borderColor: 'var(--bg)',
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: 'var(--text2)',
+            font: {
+              size: 12
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return context.label + ': ' + context.parsed + ' units';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// 🚨 7. ALERT ENGINE (VERY IMPORTANT UX UPGRADE)
+function renderAlerts() {
+  const { items, cats: categories, suppliers, transactions } = DASHBOARD_DATA;
+
+  const lowStock = items.filter(i => (i.quantity || 0) < 10);
+  const outStock = items.filter(i => (i.quantity || 0) === 0);
+
+  const alerts = [];
+
+  if (lowStock.length) {
+    alerts.push(`⚠ ${lowStock.length} item${lowStock.length > 1 ? 's' : ''} with low stock (< 10 units)`);
+  }
+
+  if (outStock.length) {
+    alerts.push(`⛔ ${outStock.length} item${outStock.length > 1 ? 's' : ''} out of stock`);
+  }
+
+  const alertsSection = document.getElementById('alerts-section');
+  const alertsContent = document.getElementById('alerts-content');
+
+  if (alerts.length) {
+    alertsContent.innerHTML = alerts.map(alert => `<div style="margin-bottom: 4px; color: var(--red);">${alert}</div>`).join('');
+    alertsSection.style.display = 'block';
+  } else {
+    alertsSection.style.display = 'none';
+  }
+
+  // console.log("ALERTS:", alerts);
+}
+
+// 🏆 8. TOP ITEMS (BUSINESS INTELLIGENCE)
+function renderTopItems() {
+  const { items, cats: categories, suppliers, transactions } = DASHBOARD_DATA;
+
+  const topItems = [...items]
+    .sort((a, b) => (b.quantity * b.price) - (a.quantity * a.price))
+    .slice(0, 5);
+
+  // console.log("Top Items:", topItems);
+}
+
+// � 10. DYNAMIC DASHBOARD CHARTS
+function renderCharts() {
+  const { items, cats: categories } = DASHBOARD_DATA;
+  if (!items.length) return;
+
+  const topItems = [...items]
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 5);
+
+  const qtyLabels = topItems.map(i => i.name);
+  const qtyData = topItems.map(i => i.quantity);
+  const qtyCtx = document.getElementById('qtyChart');
+
+  if (qtyCtx) {
+    if (qtyChartInstance) qtyChartInstance.destroy();
+    qtyChartInstance = new Chart(qtyCtx, {
+      type: 'bar',
+      data: {
+        labels: qtyLabels,
+        datasets: [{
+          label: 'Top Items Qty',
+          data: qtyData,
+          backgroundColor: '#6bb5ff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            backgroundColor: '#222',
+            titleColor: '#fff',
+            bodyColor: '#ddd'
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { color: '#d4f564' },
+            grid: { color: '#2d2f35' }
+          },
+          x: {
+            ticks: { color: '#6bb5ff' },
+            grid: { color: 'transparent' }
+          }
+        }
+      }
+    });
+  }
+
+  const categoryMap = {};
+  items.forEach(i => {
+    const name = categories[i.category_id]?.name || 'Unknown';
+    categoryMap[name] = (categoryMap[name] || 0) + (i.quantity || 0);
+  });
+
+  const catLabels = Object.keys(categoryMap);
+  const catData = Object.values(categoryMap);
+  const catCtx = document.getElementById('categoryChart');
+
+  if (catCtx) {
+    if (categoryChartInstance) categoryChartInstance.destroy();
+    categoryChartInstance = new Chart(catCtx, {
+      type: 'pie',
+      data: {
+        labels: catLabels,
+        datasets: [{
+          data: catData,
+          backgroundColor: [
+            '#d4f564', '#6bb5ff', '#ff6b6b', '#ffbb55', '#a8e040', '#6b5bff', '#ff6b9b', '#55ffbb'
+          ]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: '#ddd',
+              boxWidth: 12
+            }
+          },
+          tooltip: {
+            backgroundColor: '#222',
+            titleColor: '#fff',
+            bodyColor: '#ddd'
+          }
+        }
+      }
+    });
+  }
+}
+
+function renderTrendChart(){
+  const { items } = DASHBOARD_DATA;
+  if (!items || !items.length) return;
+
+  const dateMap = {};
+  items.forEach(i => {
+    const date = new Date(i.created_at).toISOString().split('T')[0];
+    if (!dateMap[date]) {
+      dateMap[date] = { qty: 0, value: 0 };
+    }
+    dateMap[date].qty += i.quantity || 0;
+    dateMap[date].value += (i.quantity || 0) * (i.price || 0);
+  });
+
+  const sortedDates = Object.keys(dateMap).sort();
+  const qtyData = sortedDates.map(d => dateMap[d].qty);
+  const valueData = sortedDates.map(d => dateMap[d].value);
+
+  const ctx = document.getElementById('trendChart');
+  if (!ctx) return;
+
+  if (trendChartInstance) trendChartInstance.destroy();
+  trendChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: sortedDates,
+      datasets: [
+        {
+          label: 'Total Quantity',
+          data: qtyData,
+          borderWidth: 2,
+          tension: 0.3,
+          fill: false,
+          borderColor: '#6bb5ff',
+          backgroundColor: 'rgba(107,181,255,0.2)'
+        },
+        {
+          label: 'Total Inventory Value (₹)',
+          data: valueData,
+          borderWidth: 2,
+          tension: 0.3,
+          fill: false,
+          borderColor: '#d4f564',
+          backgroundColor: 'rgba(212,245,100,0.15)'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: {
+            color: '#ddd',
+            usePointStyle: true,
+            pointStyle: 'circle'
+          }
+        },
+        tooltip: {
+          backgroundColor: '#222',
+          titleColor: '#fff',
+          bodyColor: '#ddd'
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#a8e040' },
+          grid: { color: '#2d2f35' }
+        },
+        y: {
+          ticks: { color: '#d4f564' },
+          grid: { color: '#2d2f35' },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+function renderTable(){
+  const { items, cats: categories, suppliers } = DASHBOARD_DATA;
+  const search = document.getElementById('search').value.toLowerCase();
+  const categoryFilter = document.getElementById('filterCategory').value;
+  const supplierFilter = document.getElementById('filterSupplier').value;
+  const minQty = Number(document.getElementById('minQty').value) || 0;
+  const maxQty = Number(document.getElementById('maxQty').value) || Infinity;
+  const minPrice = Number(document.getElementById('minPrice').value) || 0;
+  const maxPrice = Number(document.getElementById('maxPrice').value) || Infinity;
+  const filterDate = document.getElementById('filterDate').value;
+
+  let html = '';
+
+  items
+    .filter(i => {
+      const createdDate = new Date(i.created_at).toISOString().split('T')[0];
+      return (
+        (
+          i.name?.toLowerCase().includes(search) ||
+          i.description?.toLowerCase().includes(search)
+        )
+        && (!categoryFilter || i.category_id == categoryFilter)
+        && (!supplierFilter || i.supplier_id == supplierFilter)
+        && (i.quantity >= minQty && i.quantity <= maxQty)
+        && (i.price >= minPrice && i.price <= maxPrice)
+        && (!filterDate || createdDate === filterDate)
+      );
+    })
+    .forEach(i => {
+      const cat = categories[i.category_id]?.name || i.category_id;
+      const sup = suppliers[i.supplier_id]?.name || i.supplier_id;
+      html += `
+      <tr>
+        <td>${esc(i.name)}</td>
+        <td>${esc(i.description)}</td>
+        <td>${i.quantity}</td>
+        <td>₹${i.price}</td>
+        <td>${esc(cat)}</td>
+        <td>${esc(sup)}</td>
+        <td>${new Date(i.created_at).toLocaleString()}</td>
+      </tr>`;
+    });
+
+  if (!html) {
+    html = '<tr><td colspan="7">No items match the current filters</td></tr>';
+  }
+  document.getElementById('tableBody').innerHTML = html;
+}
+
+function renderAnalytics(){
+  const { items } = DASHBOARD_DATA;
+  if (!items.length) return;
+
+  let totalItems = items.length;
+  let totalQty = 0;
+  let totalValue = 0;
+  let lowStockCount = 0;
+  let maxItem = items[0];
+
+  items.forEach(i => {
+    totalQty += i.quantity || 0;
+    totalValue += (i.quantity || 0) * (i.price || 0);
+    if ((i.quantity || 0) > (maxItem.quantity || 0)) {
+      maxItem = i;
+    }
+    if ((i.quantity || 0) < 10) {
+      lowStockCount++;
+    }
+  });
+
+  let avgPrice = (totalValue / (totalQty || 1)).toFixed(2);
+
+  document.getElementById('summaryCard').innerHTML = `
+    <div>Total Items: <b>${totalItems}</b></div>
+    <div>Total Quantity: <b>${totalQty}</b></div>
+    <div>Total Value: <b>₹${totalValue.toLocaleString()}</b></div>
+  `;
+
+  document.getElementById('insightCard').innerHTML = `
+    <div>Top Item: <b>${esc(maxItem.name)}</b> (${maxItem.quantity})</div>
+    <div>Low Stock Items: <b>${lowStockCount}</b></div>
+    <div>Avg Price: <b>₹${avgPrice}</b></div>
+  `;
+}
+
+function resetFilters(){
+  document.querySelectorAll(
+    '#search, #filterCategory, #filterSupplier, #minQty, #maxQty, #minPrice, #maxPrice, #filterDate'
+  ).forEach(el => el.value = '');
+  renderTable();
+}
+
+// �📈 9. STOCK MOVEMENTS CHART
+function renderMovementsChart() {
+  const { transactions } = DASHBOARD_DATA;
+
+  // Group by date (last 30 days)
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const dailyData = {};
+
+  transactions.forEach(t => {
+    const date = new Date(t.timestamp).toISOString().split('T')[0];
+    if (!dailyData[date]) {
+      dailyData[date] = { in: 0, out: 0 };
+    }
+    if (t.type === 'IN') {
+      dailyData[date].in += t.quantity;
+    } else {
+      dailyData[date].out += t.quantity;
+    }
+  });
+
+  // Sort dates
+  const dates = Object.keys(dailyData).sort();
+  const inData = dates.map(date => dailyData[date].in);
+  const outData = dates.map(date => dailyData[date].out);
+
+  const ctx = document.getElementById('movementsChart');
+  if (!ctx) return;
+
+  // Destroy existing chart
+  if (window.movementsChartInstance) {
+    window.movementsChartInstance.destroy();
+  }
+
+  window.movementsChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{
+        label: 'Stock In',
+        data: inData,
+        borderColor: '#d4f564',
+        backgroundColor: 'rgba(212, 245, 100, 0.1)',
+        tension: 0.4
+      }, {
+        label: 'Stock Out',
+        data: outData,
+        borderColor: '#ff6b6b',
+        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+        tension: 0.4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: 'var(--border)'
+          },
+          ticks: {
+            color: 'var(--text3)'
+          }
+        },
+        x: {
+          grid: {
+            color: 'var(--border)'
+          },
+          ticks: {
+            color: 'var(--text3)',
+            maxTicksLimit: 7
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: 'var(--text2)'
+          }
+        }
+      }
+    }
+  });
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+loadAll();
+</script>
+{% endblock %}

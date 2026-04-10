@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% set active = "suppliers" %}
+
+{% block title %}Suppliers{% endblock %}
+{% block page_title %}Suppliers{% endblock %}
+
+{% block topbar_actions %}
+<div class="search-wrap">
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+    <circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5L14 14"/>
+  </svg>
+  <input class="search-input" type="text" id="search-input" placeholder="Search suppliers…" oninput="filterSup()">
+</div>
+<button class="btn btn-primary btn-sm" onclick="openModal()">
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5">
+    <path d="M8 2v12M2 8h12"/>
+  </svg>
+  Add supplier
+</button>
+{% endblock %}
+
+{% block content %}
+<style>
+.kpi-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.kpi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  min-width: 140px;
+  flex: 1;
+}
+.kpi-card b { font-size: 20px; color: var(--accent); display: block; margin-bottom: 4px; }
+.top-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+</style>
+<div id="sup-analytics" class="kpi-bar"></div>
+<div id="top-suppliers" class="top-grid"></div>
+<div class="table-wrap">
+  <div id="sup-container">
+    <div class="loading-state"><div class="spinner"></div> Loading…</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 class="modal-title" id="modal-title">Add supplier</h2>
+    <input type="hidden" id="sup-id">
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input class="form-input" id="sup-name" placeholder="Company name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contact person</label>
+      <input class="form-input" id="sup-contact" placeholder="Full name">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="sup-email" type="email" placeholder="contact@supplier.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phone</label>
+        <input class="form-input" id="sup-phone" type="tel" placeholder="+91 XXXXX XXXXX">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Address</label>
+      <input class="form-input" id="sup-address" placeholder="Street, City, State">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveSup()">Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allSup = [];
+function esc(s) { return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function getSupplierActivity() {
+  const movements = await apiFetch('/inventory/stock-movements');
+  const activity = {};
+  movements.forEach(m => {
+    if (!activity[m.item_id]) activity[m.item_id] = 0;
+    activity[m.item_id]++;
+  });
+  return { movements, activity };
+}
+
+async function loadSuppliersWithStats() {
+  try {
+    const [suppliers, items, supplierActivityData] = await Promise.all([
+      apiFetch('/inventory/suppliers/'),
+      apiFetch('/inventory/items/'),
+      getSupplierActivity()
+    ]);
+
+    allSup = suppliers;
+    renderAnalytics(suppliers, items, supplierActivityData.activity);
+    renderTopSuppliers(suppliers, items, supplierActivityData.activity);
+    render(allSup);
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function renderAnalytics(suppliers, items, activity) {
+  const totalSup = suppliers.length;
+  const supplierMap = {};
+  let totalValue = 0;
+
+  items.forEach(i => {
+    if (!i.supplier_id) return;
+    if (!supplierMap[i.supplier_id]) {
+      supplierMap[i.supplier_id] = { items: 0, value: 0 };
+    }
+    supplierMap[i.supplier_id].items += 1;
+    supplierMap[i.supplier_id].value += i.quantity * i.price;
+    totalValue += i.quantity * i.price;
+  });
+
+  const activeSup = Object.keys(supplierMap).length;
+  const activeSuppliersWithMovement = new Set();
+  if (activity) {
+    Object.keys(activity).forEach(itemId => {
+      const item = items.find(i => i.id === Number(itemId));
+      if (item?.supplier_id) activeSuppliersWithMovement.add(item.supplier_id);
+    });
+  }
+  const totalMovementSup = activeSuppliersWithMovement.size;
+  const avgItems = totalSup ? (items.length / totalSup).toFixed(1) : '0.0';
+  const avgValue = totalSup ? (totalValue / totalSup).toFixed(2) : '0.00';
+
+  document.getElementById('sup-analytics').innerHTML = `
+    <div class="kpi-card">Total Suppliers<br><b>${totalSup}</b></div>
+    <div class="kpi-card">Active Suppliers<br><b>${activeSup}</b></div>
+    <div class="kpi-card">Total Value<br><b>₹${totalValue.toFixed(2)}</b></div>
+    <div class="kpi-card">Avg Items/Supplier<br><b>${avgItems}</b></div>
+    <div class="kpi-card">Avg Value/Supplier<br><b>₹${avgValue}</b></div>
+    <div class="kpi-card">Suppliers with Activity<br><b>${totalMovementSup}</b></div>
+  `;
+}
+
+function renderTopSuppliers(suppliers, items, activity) {
+  const map = {};
+  items.forEach(i => {
+    if (!i.supplier_id) return;
+    if (!map[i.supplier_id]) {
+      map[i.supplier_id] = { value: 0, qty: 0, activity: 0 };
+    }
+    map[i.supplier_id].value += i.quantity * i.price;
+    map[i.supplier_id].qty += i.quantity;
+  });
+
+  const ranked = Object.entries(map)
+    .map(([id, stats]) => ({
+      supplier: suppliers.find(s => s.id == id),
+      ...stats
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
+
+  document.getElementById('top-suppliers').innerHTML = ranked.map(s => `
+    <div class="card" style="padding:18px;">
+      <b>${esc(s.supplier?.name || 'Unknown')}</b>
+      <div style="margin:12px 0 8px;color:var(--text2);font-size:13px;">₹${s.value.toFixed(2)}</div>
+      <div style="font-size:13px;color:var(--text2);">${s.qty} units</div>
+      <button class="btn btn-sm btn-ghost" style="margin-top:12px;" onclick="viewSupplierItems(${s.supplier?.id || 0})">Items</button>
+    </div>
+  `).join('');
+}
+
+async function viewSupplierItems(supplierId) {
+  const items = await apiFetch('/inventory/items/');
+  const filtered = items.filter(i => i.supplier_id === supplierId);
+  showCustomModal(`
+    <h2 class="modal-title">Supplier Items</h2>
+    <div style="max-height:360px;overflow-y:auto;padding-right:4px;">
+      <ul style="padding-left:18px;list-style:disc;">
+        ${filtered.map(i => `
+          <li style="margin-bottom:8px;color:var(--text2);">${esc(i.name)} — ${i.quantity} pcs (₹${i.price.toFixed(2)})</li>
+        `).join('')}
+      </ul>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('custom-modal').classList.remove('open')">Close</button>
+    </div>
+  `);
+}
+
+function render(list) {
+  if (!list.length) {
+    document.getElementById('sup-container').innerHTML = '<div class="empty-state"><p>No suppliers yet.</p></div>';
+    return;
+  }
+  document.getElementById('sup-container').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Name</th><th>Contact</th><th>Email</th><th>Phone</th><th>Address</th><th style="width:80px">Actions</th>
+      </tr></thead>
+      <tbody>
+        ${list.map(s => `
+          <tr>
+            <td style="font-weight:500">${esc(s.name)}</td>
+            <td>${esc(s.contact_person||'—')}</td>
+            <td style="font-family:var(--font-mono);font-size:12px">${esc(s.email||'—')}</td>
+            <td style="font-family:var(--font-mono);font-size:12px">${esc(s.phone||'—')}</td>
+            <td style="color:var(--text3)">${esc(s.address||'—')}</td>
+            <td>
+              <button class="btn btn-ghost btn-sm" onclick="editSup(${s.id})">Edit</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function filterSup() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  render(allSup.filter(s =>
+    s.name.toLowerCase().includes(q) ||
+    (s.email||'').toLowerCase().includes(q) ||
+    (s.contact_person||'').toLowerCase().includes(q)
+  ));
+}
+
+function openModal(s) {
+  document.getElementById('modal-title').textContent = s ? 'Edit supplier' : 'Add supplier';
+  document.getElementById('sup-id').value      = s?.id || '';
+  document.getElementById('sup-name').value    = s?.name || '';
+  document.getElementById('sup-contact').value = s?.contact_person || '';
+  document.getElementById('sup-email').value   = s?.email || '';
+  document.getElementById('sup-phone').value   = s?.phone || '';
+  document.getElementById('sup-address').value = s?.address || '';
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('sup-name').focus();
+}
+
+function editSup(id) { openModal(allSup.find(s => s.id === id)); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+async function saveSup() {
+  const id = document.getElementById('sup-id').value;
+  const body = {
+    name:           document.getElementById('sup-name').value.trim(),
+    contact_person: document.getElementById('sup-contact').value.trim() || null,
+    email:          document.getElementById('sup-email').value.trim() || null,
+    phone:          document.getElementById('sup-phone').value.trim() || null,
+    address:        document.getElementById('sup-address').value.trim() || null,
+  };
+  if (!body.name) { toast('Name required', 'error'); return; }
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    if (id) {
+      await apiFetch('/inventory/suppliers/' + id, { method: 'PUT', body: JSON.stringify(body) });
+      toast('Supplier updated');
+    } else {
+      await apiFetch('/inventory/suppliers/', { method: 'POST', body: JSON.stringify(body) });
+      toast('Supplier created');
+    }
+    closeModal(); loadSuppliersWithStats();
+  } catch(e) { toast(e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Save';
+}
+
+function showCustomModal(content) {
+  let customModal = document.getElementById('custom-modal');
+  if (!customModal) {
+    customModal = document.createElement('div');
+    customModal.className = 'modal-overlay';
+    customModal.id = 'custom-modal';
+    customModal.innerHTML = '<div class="modal"></div>';
+    document.body.appendChild(customModal);
+    customModal.addEventListener('click', e => {
+      if (e.target === e.currentTarget) customModal.classList.remove('open');
+    });
+  }
+  customModal.querySelector('.modal').innerHTML = content;
+  customModal.classList.add('open');
+}
+
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+loadSuppliersWithStats();
+</script>
+{% endblock %}

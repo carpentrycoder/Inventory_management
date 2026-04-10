@@ -1,0 +1,579 @@
+{% extends "base.html" %}
+{% set active = "reports" %}
+
+{% block title %}Reports{% endblock %}
+{% block page_title %}Inventory Reports{% endblock %}
+
+{% block topbar_actions %}
+<div class="search-wrap">
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+    <circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5L14 14"/>
+  </svg>
+  <input class="search-input" type="text" id="item-search" placeholder="Search items…" oninput="applyFilter()" style="margin-left:0">
+</div>
+<button class="btn btn-primary btn-sm" onclick="exportCSV()" style="margin-left:10px">
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M14 10v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4M8 2v10M2 8l6 6 6-6"/>
+  </svg>
+  Export CSV
+</button>
+{% endblock %}
+
+{% block content %}
+<style>
+.kpi-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.kpi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  min-width: 140px;
+  flex: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.kpi-card:hover { border-color: var(--accent); background: var(--bg3); }
+.kpi-card b { font-size: 20px; color: var(--accent); display: block; margin-bottom: 4px; }
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.breakdown-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+.breakdown-card h3 {
+  margin-bottom: 16px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.breakdown-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+.breakdown-item:last-child { border-bottom: none; }
+.breakdown-item-name { color: var(--text2); flex: 1; }
+.breakdown-item-qty {
+  color: var(--accent);
+  font-weight: 500;
+  font-family: var(--font-mono);
+  text-align: right;
+}
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.chart-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  height: 300px;
+}
+.chart-box canvas { max-height: 260px; background-color: transparent !important; }
+#trendChart, #comparisonChart { background: var(--bg2); display: block; }
+.table-wrap { margin-top: 24px; }
+.badge-in { background: var(--accent-dim); color: var(--accent); }
+.badge-out { background: var(--red-dim); color: var(--red); }
+.empty-breakdown { color: var(--text3); font-size: 12px; text-align: center; padding: 12px 0; }
+</style>
+
+<div id="reports-analytics" class="kpi-bar"></div>
+
+<div id="breakdown-details" class="breakdown-grid"></div>
+
+<div class="charts-grid">
+  <div class="chart-box">
+    <h3 style="margin-bottom:16px;color:var(--text);">Daily Stock Movement</h3>
+    <canvas id="trendChart"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3 style="margin-bottom:16px;color:var(--text);">Stock In vs Out</h3>
+    <canvas id="comparisonChart"></canvas>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <div id="reports-container">
+    <div class="loading-state"><div class="spinner"></div> Loading reports…</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let allMovements = [];
+let allItems = [];
+let allPurchases = [];
+let allDispatches = [];
+let dashboardSummary = {};
+let filteredMovements = [];
+
+function esc(s) { return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function loadReports() {
+  try {
+    const [movements, items, purchases, dispatches, summary] = await Promise.all([
+      apiFetch('/inventory/stock-movements'),
+      apiFetch('/inventory/items/'),
+      apiFetch('/inventory/purchases'),
+      apiFetch('/inventory/dispatches'),
+      apiFetch('/inventory/dashboard/summary')
+    ]);
+
+    allMovements = movements || [];
+    allItems = items || [];
+    allPurchases = purchases || [];
+    allDispatches = dispatches || [];
+    dashboardSummary = summary || {};
+    filteredMovements = [...allMovements];
+
+    renderKPIs();
+    renderCharts();
+    renderTable();
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+function applyFilter() {
+  const searchQuery = document.getElementById('item-search').value.toLowerCase();
+
+  if (!searchQuery) {
+    filteredMovements = [...allMovements];
+  } else {
+    filteredMovements = allMovements.filter(m => 
+      m.item_name.toLowerCase().includes(searchQuery)
+    );
+  }
+
+  renderKPIs();
+  renderCharts();
+  renderTable();
+}
+
+function renderKPIs() {
+  let stockIn = 0;
+  let stockOut = 0;
+  let totalTransactions = filteredMovements.length;
+
+  filteredMovements.forEach(m => {
+    if (m.type === 'IN') {
+      stockIn += m.quantity;
+    } else if (m.type === 'OUT') {
+      stockOut += m.quantity;
+    }
+  });
+
+  const netFlow = stockIn - stockOut;
+  const purchaseCount = allPurchases.length;
+  const dispatchCount = allDispatches.length;
+  
+  // Calculate inventory value
+  let totalValue = 0;
+  allItems.forEach(i => {
+    totalValue += (i.quantity || 0) * (i.price || 0);
+  });
+
+  document.getElementById('reports-analytics').innerHTML = `
+    <div class="kpi-card">Stock In<br><b>${stockIn}</b></div>
+    <div class="kpi-card">Stock Out<br><b>${stockOut}</b></div>
+    <div class="kpi-card">Net Flow<br><b style="color:${netFlow >= 0 ? 'var(--accent)' : 'var(--red)'}">${netFlow >= 0 ? '+' : ''}${netFlow}</b></div>
+    <div class="kpi-card">Total Transactions<br><b>${totalTransactions}</b></div>
+    <div class="kpi-card">Purchases<br><b>${purchaseCount}</b></div>
+    <div class="kpi-card">Dispatches<br><b>${dispatchCount}</b></div>
+    <div class="kpi-card">Inventory Value<br><b>₹${totalValue.toFixed(2)}</b></div>
+  `;
+
+  renderBreakdownDetails();
+}
+
+function renderBreakdownDetails() {
+  // Calculate Stock In items
+  const stockInMap = {};
+  filteredMovements.forEach(m => {
+    if (m.type === 'IN') {
+      if (!stockInMap[m.item_id]) {
+        stockInMap[m.item_id] = { name: m.item_name, qty: 0 };
+      }
+      stockInMap[m.item_id].qty += m.quantity;
+    }
+  });
+
+  // Calculate Stock Out items
+  const stockOutMap = {};
+  filteredMovements.forEach(m => {
+    if (m.type === 'OUT') {
+      if (!stockOutMap[m.item_id]) {
+        stockOutMap[m.item_id] = { name: m.item_name, qty: 0 };
+      }
+      stockOutMap[m.item_id].qty += m.quantity;
+    }
+  });
+
+  // Get purchases with supplier info
+  const purchaseMap = {};
+  allPurchases.forEach(p => {
+    const supplier = allItems.find(i => i.supplier_id === p.supplier_id);
+    const key = p.supplier_id || 'Unknown';
+    if (!purchaseMap[key]) {
+      purchaseMap[key] = { name: supplier?.name || 'Unknown Supplier', count: 0, value: p.total_cost || 0 };
+    }
+    purchaseMap[key].count += 1;
+  });
+
+  // Get dispatches with customer info
+  const dispatchMap = {};
+  allDispatches.forEach(d => {
+    if (!dispatchMap[d.customer_name]) {
+      dispatchMap[d.customer_name] = { name: d.customer_name, count: 0 };
+    }
+    dispatchMap[d.customer_name].count += 1;
+  });
+
+  let html = '';
+
+  // Stock In breakdown
+  const inItems = Object.values(stockInMap).sort((a, b) => b.qty - a.qty);
+  html += `
+    <div class="breakdown-card">
+      <h3>📥 Stock In Items</h3>
+      ${inItems.length ? inItems.map(item => `
+        <div class="breakdown-item">
+          <span class="breakdown-item-name">${esc(item.name)}</span>
+          <span class="breakdown-item-qty">${item.qty} units</span>
+        </div>
+      `).join('') : '<div class="empty-breakdown">No stock in</div>'}
+    </div>
+  `;
+
+  // Stock Out breakdown
+  const outItems = Object.values(stockOutMap).sort((a, b) => b.qty - a.qty);
+  html += `
+    <div class="breakdown-card">
+      <h3>📤 Stock Out Items</h3>
+      ${outItems.length ? outItems.map(item => `
+        <div class="breakdown-item">
+          <span class="breakdown-item-name">${esc(item.name)}</span>
+          <span class="breakdown-item-qty">${item.qty} units</span>
+        </div>
+      `).join('') : '<div class="empty-breakdown">No stock out</div>'}
+    </div>
+  `;
+
+  // Purchases breakdown
+  const purchases = Object.values(purchaseMap).sort((a, b) => b.count - a.count);
+  html += `
+    <div class="breakdown-card">
+      <h3>🛒 Purchase Summary</h3>
+      ${purchases.length ? purchases.map(p => `
+        <div class="breakdown-item">
+          <span class="breakdown-item-name">${esc(p.name)}</span>
+          <span class="breakdown-item-qty">${p.count} order${p.count > 1 ? 's' : ''}</span>
+        </div>
+      `).join('') : '<div class="empty-breakdown">No purchases</div>'}
+    </div>
+  `;
+
+  // Dispatches breakdown
+  const dispatches = Object.values(dispatchMap).sort((a, b) => b.count - a.count);
+  html += `
+    <div class="breakdown-card">
+      <h3>✈️ Dispatch Summary</h3>
+      ${dispatches.length ? dispatches.map(d => `
+        <div class="breakdown-item">
+          <span class="breakdown-item-name">${esc(d.name)}</span>
+          <span class="breakdown-item-qty">${d.count} dispatch${d.count > 1 ? 'es' : ''}</span>
+        </div>
+      `).join('') : '<div class="empty-breakdown">No dispatches</div>'}
+    </div>
+  `;
+
+  document.getElementById('breakdown-details').innerHTML = html;
+}
+
+function renderCharts() {
+  renderTrendChart();
+  renderComparisonChart();
+}
+
+function renderTrendChart() {
+  const ctx = document.getElementById('trendChart').getContext('2d');
+
+  // Group movements by date
+  const dailyData = {};
+  filteredMovements.forEach(m => {
+    const date = new Date(m.timestamp).toLocaleDateString();
+    if (!dailyData[date]) dailyData[date] = { in: 0, out: 0 };
+
+    if (m.type === 'IN') {
+      dailyData[date].in += m.quantity;
+    } else if (m.type === 'OUT') {
+      dailyData[date].out += m.quantity;
+    }
+  });
+
+  const dates = Object.keys(dailyData).sort();
+  const inData = dates.map(d => dailyData[d].in);
+  const outData = dates.map(d => dailyData[d].out);
+
+  // Destroy existing chart if it exists
+  const existingChart = Chart.helpers?.getChart?.('trendChart');
+  if (existingChart) existingChart.destroy();
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{
+        label: 'Stock In',
+        data: inData,
+        borderColor: 'var(--accent)',
+        backgroundColor: 'var(--accent-dim)',
+        tension: 0.4,
+        fill: true,
+        borderWidth: 2
+      }, {
+        label: 'Stock Out',
+        data: outData,
+        borderColor: 'var(--red)',
+        backgroundColor: 'var(--red-dim)',
+        tension: 0.4,
+        fill: true,
+        borderWidth: 2
+      }]
+    },
+    plugins: [{
+      id: 'customChartBg',
+      beforeDraw(chart) {
+        const {ctx, chartArea} = chart;
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0)';
+        ctx.clearRect(chartArea.left, chartArea.top, chartArea.width, chartArea.height);
+        ctx.restore();
+      }
+    }],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { 
+          labels: { 
+            color: 'var(--text2)',
+            font: { family: "var(--font-body)", size: 12 }
+          } 
+        },
+        title: {
+          color: 'var(--text)'
+        },
+        tooltip: {
+          backgroundColor: 'rgba(19, 19, 22, 0.9)',
+          titleColor: 'var(--text)',
+          bodyColor: 'var(--text2)',
+          borderColor: 'var(--border)',
+          borderWidth: 1,
+          padding: 12,
+          cornerRadius: 8
+        }
+      },
+      scales: {
+        y: { 
+          beginAtZero: true,
+          ticks: { 
+            color: 'var(--text3)',
+            font: { size: 11 }
+          },
+          grid: { 
+            color: 'var(--border)',
+            drawBorder: false
+          }
+        },
+        x: {
+          ticks: { 
+            color: 'var(--text3)',
+            font: { size: 11 }
+          },
+          grid: { 
+            color: 'var(--border)',
+            drawBorder: false
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderComparisonChart() {
+  const ctx = document.getElementById('comparisonChart').getContext('2d');
+
+  let stockIn = 0;
+  let stockOut = 0;
+
+  filteredMovements.forEach(m => {
+    if (m.type === 'IN') {
+      stockIn += m.quantity;
+    } else if (m.type === 'OUT') {
+      stockOut += m.quantity;
+    }
+  });
+
+  // Destroy existing chart if it exists
+  const existingChart = Chart.helpers?.getChart?.('comparisonChart');
+  if (existingChart) existingChart.destroy();
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Stock Movements'],
+      datasets: [{
+        label: 'Stock In',
+        data: [stockIn],
+        backgroundColor: 'var(--accent)',
+        borderColor: 'var(--accent2)',
+        borderWidth: 1,
+        borderRadius: 6
+      }, {
+        label: 'Stock Out',
+        data: [stockOut],
+        backgroundColor: 'var(--red)',
+        borderColor: 'rgba(255, 107, 107, 0.5)',
+        borderWidth: 1,
+        borderRadius: 6
+      }]
+    },
+    plugins: [{
+      id: 'customChartBg',
+      beforeDraw(chart) {
+        const {ctx, chartArea} = chart;
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0)';
+        ctx.clearRect(chartArea.left, chartArea.top, chartArea.width, chartArea.height);
+        ctx.restore();
+      }
+    }],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { 
+          labels: { 
+            color: 'var(--text2)',
+            font: { family: "var(--font-body)", size: 12 }
+          } 
+        },
+        tooltip: {
+          backgroundColor: 'rgba(19, 19, 22, 0.9)',
+          titleColor: 'var(--text)',
+          bodyColor: 'var(--text2)',
+          borderColor: 'var(--border)',
+          borderWidth: 1,
+          padding: 12,
+          cornerRadius: 8
+        }
+      },
+      scales: {
+        y: { 
+          beginAtZero: true,
+          ticks: { 
+            color: 'var(--text3)',
+            font: { size: 11 }
+          },
+          grid: { 
+            color: 'var(--border)',
+            drawBorder: false
+          }
+        },
+        x: {
+          ticks: { 
+            color: 'var(--text3)',
+            font: { size: 11 }
+          },
+          grid: { 
+            color: 'var(--border)',
+            drawBorder: false
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderTable() {
+  if (!filteredMovements.length) {
+    document.getElementById('reports-container').innerHTML = '<div class="empty-state"><p>No movements found.</p></div>';
+    return;
+  }
+
+  // Sort by date (newest first)
+  const sortedMovements = filteredMovements.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  document.getElementById('reports-container').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Item</th><th>Type</th><th>Quantity</th><th>Notes</th><th>Date</th>
+      </tr></thead>
+      <tbody>
+        ${sortedMovements.map(m => {
+          const typeClass = m.type === 'IN' ? 'badge-in' : 'badge-out';
+
+          return `
+          <tr>
+            <td style="font-weight:500">${esc(m.item_name || 'Unknown')}</td>
+            <td><span class="badge ${typeClass}">${m.type}</span></td>
+            <td style="text-align:center;font-family:var(--font-mono)">${m.quantity}</td>
+            <td style="color:var(--text3)">${esc(m.notes || '—')}</td>
+            <td style="font-family:var(--font-mono);font-size:12px">${new Date(m.timestamp).toLocaleString()}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+function exportCSV() {
+  if (!filteredMovements.length) {
+    toast('No data to export', 'error');
+    return;
+  }
+
+  const headers = ['Item', 'Type', 'Quantity', 'Notes', 'Date'];
+  const rows = filteredMovements.map(m => {
+    return [
+      m.item_name || 'Unknown',
+      m.type,
+      m.quantity,
+      m.notes || '',
+      new Date(m.timestamp).toLocaleString()
+    ];
+  });
+
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', `inventory-report-${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+loadReports();
+</script>
+{% endblock %}

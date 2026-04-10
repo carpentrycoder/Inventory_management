@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% set active = "categories" %}
+
+{% block title %}Categories{% endblock %}
+{% block page_title %}Categories{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" onclick="openModal()">
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5">
+    <path d="M8 2v12M2 8h12"/>
+  </svg>
+  Add category
+</button>
+{% endblock %}
+
+{% block content %}
+<style>
+.kpi-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.kpi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  min-width: 140px;
+  flex: 1;
+}
+.kpi-card b { font-size: 20px; color: var(--accent); display: block; margin-bottom: 4px; }
+.top-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.badge-health {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.badge-health.empty { background: var(--red-dim); color: var(--red); }
+.badge-health.low { background: var(--amber-dim); color: var(--amber); }
+.badge-health.healthy { background: var(--accent-dim); color: var(--accent); }
+</style>
+<div id="cat-analytics" class="kpi-bar"></div>
+<div id="top-categories" class="top-grid"></div>
+<div class="table-wrap">
+  <div id="cats-container">
+    <div class="loading-state"><div class="spinner"></div> Loading…</div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 class="modal-title" id="modal-title">Add category</h2>
+    <input type="hidden" id="cat-id">
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input class="form-input" id="cat-name" placeholder="e.g. Electronics">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input class="form-input" id="cat-desc" placeholder="Optional description">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveCat()">Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allCats = [];
+let allItems = [];
+function esc(s) { return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function loadCategoriesPage() {
+  try {
+    const [categories, items] = await Promise.all([
+      apiFetch('/inventory/categories/'),
+      apiFetch('/inventory/items/')
+    ]);
+
+    allCats = categories;
+    allItems = items;
+
+    const stats = computeCategoryStats(categories, items);
+
+    renderKPIs(stats);
+    renderTopCategories(stats);
+    renderTable(stats);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function computeCategoryStats(categories, items) {
+  const stats = {};
+
+  categories.forEach(c => {
+    stats[c.id] = {
+      name: c.name,
+      item_count: 0,
+      total_qty: 0,
+      total_value: 0
+    };
+  });
+
+  items.forEach(i => {
+    if (!i.category_id) return;
+
+    const cat = stats[i.category_id];
+    if (!cat) return;
+
+    cat.item_count += 1;
+    cat.total_qty += i.quantity || 0;
+    cat.total_value += (i.quantity || 0) * (i.price || 0);
+  });
+
+  return stats;
+}
+
+function renderKPIs(stats) {
+  const values = Object.values(stats);
+
+  const totalCats = values.length;
+  const totalItems = values.reduce((s, c) => s + c.item_count, 0);
+  const totalValue = values.reduce((s, c) => s + c.total_value, 0);
+  const topCat = values.sort((a,b) => b.total_value - a.total_value)[0];
+
+  document.getElementById('cat-analytics').innerHTML = `
+    <div class="kpi-card">Total Categories<br><b>${totalCats}</b></div>
+    <div class="kpi-card">Total Items<br><b>${totalItems}</b></div>
+    <div class="kpi-card">Inventory Value<br><b>₹${totalValue.toFixed(2)}</b></div>
+    <div class="kpi-card">Top Category<br><b>${topCat?.name || 'None'}</b></div>
+  `;
+}
+
+function renderTopCategories(stats) {
+  const topCategories = Object.values(stats)
+    .sort((a, b) => b.total_value - a.total_value)
+    .slice(0, 5);
+
+  document.getElementById('top-categories').innerHTML = topCategories.map(c => `
+    <div class="card" style="padding:18px;">
+      <b>${esc(c.name)}</b>
+      <div style="margin:12px 0 8px;color:var(--text2);font-size:13px;">₹${c.total_value.toFixed(2)}</div>
+      <div style="font-size:13px;color:var(--text2);">${c.total_qty} units</div>
+      <button class="btn btn-sm btn-ghost" style="margin-top:12px;" onclick="viewCategoryItems(${Object.keys(stats).find(id => stats[id] === c)})">Items</button>
+    </div>
+  `).join('');
+}
+
+function renderTable(stats) {
+  if (!allCats.length) {
+    document.getElementById('cats-container').innerHTML = '<div class="empty-state"><p>No categories yet.</p></div>';
+    return;
+  }
+
+  const totalInventoryValue = Object.values(stats).reduce((s, c) => s + c.total_value, 0);
+
+  document.getElementById('cats-container').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Name</th><th>Items</th><th>Total Qty</th><th>Inventory Value</th><th>Share</th><th>Health</th><th style="width:80px">Actions</th>
+      </tr></thead>
+      <tbody>
+        ${allCats.map(c => {
+          const stat = stats[c.id] || { item_count: 0, total_qty: 0, total_value: 0 };
+          const share = totalInventoryValue ? ((stat.total_value / totalInventoryValue) * 100).toFixed(1) : '0.0';
+          const health = stat.total_qty === 0 ? 'empty' : stat.total_qty < 20 ? 'low' : 'healthy';
+          const healthLabel = stat.total_qty === 0 ? 'Empty' : stat.total_qty < 20 ? 'Low' : 'Healthy';
+
+          return `
+          <tr>
+            <td><span class="badge badge-blue">${esc(c.name)}</span></td>
+            <td style="text-align:center">${stat.item_count}</td>
+            <td style="text-align:center">${stat.total_qty}</td>
+            <td style="font-family:var(--font-mono);font-size:12px">₹${stat.total_value.toFixed(2)}</td>
+            <td style="text-align:center">${share}%</td>
+            <td><span class="badge-health ${health}">${healthLabel}</span></td>
+            <td>
+              <button class="btn btn-ghost btn-sm" onclick="editCat(${c.id})">Edit</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function viewCategoryItems(categoryId) {
+  const category = allCats.find(c => c.id === categoryId);
+  const filtered = allItems.filter(i => i.category_id === categoryId);
+
+  showCustomModal(`
+    <h2 class="modal-title">${esc(category?.name || 'Category')} Items</h2>
+    <div style="max-height:360px;overflow-y:auto;padding-right:4px;">
+      <ul style="padding-left:18px;list-style:disc;">
+        ${filtered.map(i => `
+          <li style="margin-bottom:8px;color:var(--text2);">${esc(i.name)} — ${i.quantity} pcs (₹${i.price.toFixed(2)})</li>
+        `).join('')}
+      </ul>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('custom-modal').classList.remove('open')">Close</button>
+    </div>
+  `);
+}
+
+function openModal(cat) {
+  document.getElementById('modal-title').textContent = cat ? 'Edit category' : 'Add category';
+  document.getElementById('cat-id').value   = cat?.id || '';
+  document.getElementById('cat-name').value = cat?.name || '';
+  document.getElementById('cat-desc').value = cat?.description || '';
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('cat-name').focus();
+}
+
+function editCat(id) { openModal(allCats.find(c => c.id === id)); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+async function saveCat() {
+  const id = document.getElementById('cat-id').value;
+  const body = {
+    name: document.getElementById('cat-name').value.trim(),
+    description: document.getElementById('cat-desc').value.trim() || null,
+  };
+  if (!body.name) { toast('Name required', 'error'); return; }
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    if (id) {
+      await apiFetch('/inventory/categories/' + id, { method: 'PUT', body: JSON.stringify(body) });
+      toast('Category updated');
+    } else {
+      await apiFetch('/inventory/categories/', { method: 'POST', body: JSON.stringify(body) });
+      toast('Category created');
+    }
+    closeModal(); loadCategoriesPage();
+  } catch(e) { toast(e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Save';
+}
+
+function showCustomModal(content) {
+  let customModal = document.getElementById('custom-modal');
+  if (!customModal) {
+    customModal = document.createElement('div');
+    customModal.className = 'modal-overlay';
+    customModal.id = 'custom-modal';
+    customModal.innerHTML = '<div class="modal"></div>';
+    document.body.appendChild(customModal);
+    customModal.addEventListener('click', e => {
+      if (e.target === e.currentTarget) customModal.classList.remove('open');
+    });
+  }
+  customModal.querySelector('.modal').innerHTML = content;
+  customModal.classList.add('open');
+}
+
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+loadCategoriesPage();
+</script>
+{% endblock %}

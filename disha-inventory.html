@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disha Inventory Management</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg-base: #0a0a0f;
+    --bg-panel: #111118;
+    --bg-card: #16161f;
+    --bg-input: #1c1c28;
+    --border: #2a2a3a;
+    --border-bright: #3d3d55;
+    --accent: #f0c040;
+    --accent2: #40c0f0;
+    --accent3: #f04080;
+    --text-primary: #e8e8f0;
+    --text-secondary: #8888aa;
+    --text-muted: #55556a;
+    --success: #40f090;
+    --danger: #f04060;
+    --warning: #f0a040;
+    --sidebar-w: 240px;
+    --radius: 8px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── SIDEBAR ─────────────────────────────────── */
+  #sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    z-index: 100;
+    transition: transform .3s ease;
+  }
+
+  .sidebar-logo {
+    padding: 24px 20px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-logo .logo-badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #000;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    margin-bottom: 6px;
+  }
+  .sidebar-logo h1 { font-size: 1.1rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+  .sidebar-logo p { font-size: 0.7rem; color: var(--text-muted); font-family: 'Space Mono', monospace; }
+
+  .nav-section-label {
+    font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--text-muted); padding: 20px 20px 8px; font-family: 'Space Mono', monospace;
+  }
+
+  .nav-item-custom {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 20px; cursor: pointer;
+    color: var(--text-secondary); font-size: 0.88rem; font-weight: 600;
+    border-left: 3px solid transparent;
+    transition: all .2s ease; user-select: none;
+  }
+  .nav-item-custom:hover { background: var(--bg-card); color: var(--text-primary); border-left-color: var(--border-bright); }
+  .nav-item-custom.active { background: rgba(240,192,64,.07); color: var(--accent); border-left-color: var(--accent); }
+  .nav-item-custom i { width: 18px; text-align: center; font-size: 1rem; }
+
+  .sidebar-footer {
+    margin-top: auto; padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .user-chip {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px;
+  }
+  .user-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: #000;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .user-info .name { font-size: 0.82rem; font-weight: 700; }
+  .user-info .role { font-size: 0.7rem; color: var(--text-muted); font-family: 'Space Mono', monospace; }
+  .btn-logout {
+    margin-left: auto; background: none; border: none;
+    color: var(--text-muted); cursor: pointer; font-size: 1rem;
+    transition: color .2s;
+  }
+  .btn-logout:hover { color: var(--danger); }
+
+  /* ── MAIN ─────────────────────────────────────── */
+  #main {
+    margin-left: var(--sidebar-w);
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 90;
+    background: rgba(10,10,15,.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 32px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .page-title { font-size: 1.2rem; font-weight: 800; }
+  .page-title span { color: var(--text-muted); font-weight: 400; font-size: 0.85rem; margin-left: 10px; font-family: 'Space Mono', monospace; }
+  .topbar-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+  #content { padding: 28px 32px; flex: 1; }
+
+  /* ── AUTH ─────────────────────────────────────── */
+  #auth-screen {
+    position: fixed; inset: 0;
+    background: var(--bg-base);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 999;
+  }
+  .auth-card {
+    width: 100%; max-width: 420px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 40px;
+  }
+  .auth-logo { text-align: center; margin-bottom: 32px; }
+  .auth-logo .badge-label {
+    background: var(--accent); color: #000;
+    font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 3px;
+    padding: 4px 12px; border-radius: 3px; display: inline-block; margin-bottom: 12px;
+  }
+  .auth-logo h2 { font-size: 1.6rem; font-weight: 800; }
+  .auth-logo p { color: var(--text-muted); font-size: 0.82rem; font-family: 'Space Mono', monospace; }
+
+  /* ── FORM CONTROLS ────────────────────────────── */
+  .form-label { font-size: 0.78rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px; }
+  .form-control, .form-select {
+    background: var(--bg-input) !important; border: 1px solid var(--border) !important;
+    color: var(--text-primary) !important; border-radius: var(--radius) !important;
+    font-family: 'Syne', sans-serif; font-size: 0.88rem; padding: 10px 14px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px rgba(240,192,64,.15) !important;
+    outline: none;
+  }
+  .form-control::placeholder { color: var(--text-muted) !important; }
+  textarea.form-control { resize: vertical; min-height: 80px; }
+  .form-select option { background: var(--bg-panel); }
+
+  /* ── BUTTONS ──────────────────────────────────── */
+  .btn-accent {
+    background: var(--accent); color: #000; border: none;
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem;
+    padding: 10px 20px; border-radius: var(--radius); cursor: pointer;
+    transition: all .2s; letter-spacing: .5px;
+  }
+  .btn-accent:hover { background: #ffd060; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(240,192,64,.3); }
+  .btn-ghost {
+    background: transparent; color: var(--text-secondary);
+    border: 1px solid var(--border); font-family: 'Syne', sans-serif;
+    font-weight: 600; font-size: 0.85rem; padding: 10px 20px;
+    border-radius: var(--radius); cursor: pointer; transition: all .2s;
+  }
+  .btn-ghost:hover { border-color: var(--border-bright); color: var(--text-primary); background: var(--bg-card); }
+  .btn-danger-soft {
+    background: rgba(240,64,96,.1); color: var(--danger);
+    border: 1px solid rgba(240,64,96,.3); font-family: 'Syne', sans-serif;
+    font-weight: 600; font-size: 0.85rem; padding: 10px 20px;
+    border-radius: var(--radius); cursor: pointer; transition: all .2s;
+  }
+  .btn-danger-soft:hover { background: rgba(240,64,96,.2); }
+
+  /* ── CARDS ────────────────────────────────────── */
+  .stat-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 22px 24px;
+    position: relative; overflow: hidden;
+    transition: border-color .2s, transform .2s;
+  }
+  .stat-card:hover { border-color: var(--border-bright); transform: translateY(-2px); }
+  .stat-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .stat-card.c1::before { background: var(--accent); }
+  .stat-card.c2::before { background: var(--accent2); }
+  .stat-card.c3::before { background: var(--success); }
+  .stat-card.c4::before { background: var(--danger); }
+  .stat-label { font-size: 0.72rem; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); font-family: 'Space Mono', monospace; margin-bottom: 10px; }
+  .stat-value { font-size: 2rem; font-weight: 800; line-height: 1; }
+  .stat-icon { position: absolute; right: 20px; top: 20px; font-size: 1.8rem; opacity: .12; }
+
+  .panel {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 24px;
+  }
+  .panel-title {
+    font-size: 0.82rem; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-muted); font-family: 'Space Mono', monospace;
+    margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
+  }
+  .panel-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ── TABLE ────────────────────────────────────── */
+  .inv-table { width: 100%; border-collapse: collapse; }
+  .inv-table th {
+    font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-muted); font-family: 'Space Mono', monospace;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    text-align: left; font-weight: 400;
+  }
+  .inv-table td {
+    padding: 13px 14px; border-bottom: 1px solid rgba(42,42,58,.5);
+    font-size: 0.875rem; vertical-align: middle;
+  }
+  .inv-table tr:last-child td { border-bottom: none; }
+  .inv-table tr:hover td { background: rgba(255,255,255,.02); }
+  .inv-table tbody tr { transition: background .15s; }
+
+  .badge-stock {
+    font-family: 'Space Mono', monospace; font-size: 0.72rem;
+    padding: 3px 9px; border-radius: 20px; font-weight: 400;
+  }
+  .badge-ok { background: rgba(64,240,144,.1); color: var(--success); border: 1px solid rgba(64,240,144,.2); }
+  .badge-low { background: rgba(240,64,96,.1); color: var(--danger); border: 1px solid rgba(240,64,96,.2); }
+  .badge-med { background: rgba(240,160,64,.1); color: var(--warning); border: 1px solid rgba(240,160,64,.2); }
+
+  .price-tag { font-family: 'Space Mono', monospace; color: var(--accent2); }
+  .item-name { font-weight: 700; }
+  .item-desc { font-size: 0.75rem; color: var(--text-muted); }
+
+  .action-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-muted);
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 0.8rem;
+    transition: all .2s; margin-right: 4px;
+  }
+  .action-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .action-btn.del:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ── TABS ─────────────────────────────────────── */
+  .custom-tabs { display: flex; gap: 4px; margin-bottom: 24px; }
+  .custom-tab {
+    padding: 9px 18px; border-radius: 6px; cursor: pointer;
+    font-size: 0.82rem; font-weight: 700; transition: all .2s;
+    color: var(--text-muted); background: transparent; border: 1px solid transparent;
+  }
+  .custom-tab:hover { color: var(--text-primary); background: var(--bg-card); }
+  .custom-tab.active { background: var(--bg-card); color: var(--accent); border-color: var(--border); }
+
+  /* ── ALERTS ───────────────────────────────────── */
+  .alert-custom {
+    padding: 12px 16px; border-radius: var(--radius); font-size: 0.85rem;
+    display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+    animation: slideDown .3s ease;
+  }
+  .alert-success { background: rgba(64,240,144,.08); border: 1px solid rgba(64,240,144,.25); color: var(--success); }
+  .alert-error { background: rgba(240,64,96,.08); border: 1px solid rgba(240,64,96,.25); color: var(--danger); }
+  .alert-warning { background: rgba(240,160,64,.08); border: 1px solid rgba(240,160,64,.25); color: var(--warning); }
+
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── MODAL ────────────────────────────────────── */
+  .modal-content {
+    background: var(--bg-panel) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    color: var(--text-primary) !important;
+  }
+  .modal-header { border-bottom: 1px solid var(--border) !important; padding: 20px 24px !important; }
+  .modal-body { padding: 24px !important; }
+  .modal-footer { border-top: 1px solid var(--border) !important; padding: 16px 24px !important; }
+  .modal-title { font-size: 1rem; font-weight: 800; }
+  .btn-close { filter: invert(1) brightness(.6); }
+
+  /* ── SEARCH BAR ───────────────────────────────── */
+  .search-wrap { position: relative; }
+  .search-wrap i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+  .search-wrap input { padding-left: 36px !important; }
+
+  /* ── EMPTY STATE ──────────────────────────────── */
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+  .empty-state i { font-size: 3rem; margin-bottom: 16px; display: block; }
+  .empty-state p { font-family: 'Space Mono', monospace; font-size: 0.8rem; }
+
+  /* ── LOADING ──────────────────────────────────── */
+  .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(240,192,64,.2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── SCROLLBAR ────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* ── CHART CONTAINER ──────────────────────────── */
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* ── RESPONSIVE ───────────────────────────────── */
+  @media (max-width: 768px) {
+    #sidebar { transform: translateX(-100%); }
+    #sidebar.open { transform: none; }
+    #main { margin-left: 0; }
+    #content { padding: 20px 16px; }
+    .topbar { padding: 14px 16px; }
+  }
+
+  /* ── PAGE TRANSITIONS ─────────────────────────── */
+  .page { display: none; animation: pageIn .2s ease; }
+  .page.active { display: block; }
+  @keyframes pageIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<!-- ══ AUTH SCREEN ══════════════════════════════════════════════ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div id="auth-alert"></div>
+    <div class="auth-logo">
+      <div class="badge-label">DISHA SYSTEMS</div>
+      <h2>Inventory Portal</h2>
+      <p>Stock · Suppliers · Categories</p>
+    </div>
+
+    <!-- Login -->
+    <div id="view-login">
+      <div class="mb-3">
+        <label class="form-label">Username</label>
+        <input type="text" id="login-user" class="form-control" placeholder="your_username">
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Password</label>
+        <input type="password" id="login-pass" class="form-control" placeholder="••••••••">
+      </div>
+      <button class="btn-accent w-100 mb-3" onclick="doLogin()">Login <span id="login-spin" style="display:none"><span class="spinner"></span></span></button>
+      <div class="d-flex justify-content-between">
+        <button class="btn-ghost" style="font-size:.8rem;padding:7px 14px" onclick="switchAuth('signup')">Create Account</button>
+        <button class="btn-ghost" style="font-size:.8rem;padding:7px 14px" onclick="switchAuth('forgot')">Forgot Password</button>
+      </div>
+    </div>
+
+    <!-- Signup -->
+    <div id="view-signup" style="display:none">
+      <div class="mb-3">
+        <label class="form-label">Username</label>
+        <input type="text" id="signup-user" class="form-control" placeholder="choose_username">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Password</label>
+        <input type="password" id="signup-pass" class="form-control" placeholder="min 6 characters">
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Confirm Password</label>
+        <input type="password" id="signup-confirm" class="form-control" placeholder="••••••••">
+      </div>
+      <button class="btn-accent w-100 mb-3" onclick="doSignup()">Create Account</button>
+      <button class="btn-ghost w-100" onclick="switchAuth('login')">← Back to Login</button>
+    </div>
+
+    <!-- Forgot Password -->
+    <div id="view-forgot" style="display:none">
+      <div class="mb-3">
+        <label class="form-label">Username</label>
+        <input type="text" id="forgot-user" class="form-control" placeholder="your_username">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">New Password</label>
+        <input type="password" id="forgot-new" class="form-control" placeholder="new password">
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Confirm New Password</label>
+        <input type="password" id="forgot-confirm" class="form-control" placeholder="confirm password">
+      </div>
+      <button class="btn-accent w-100 mb-3" onclick="doForgot()">Reset Password</button>
+      <button class="btn-ghost w-100" onclick="switchAuth('login')">← Back to Login</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SIDEBAR ══════════════════════════════════════════════════ -->
+<div id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-badge">DISHA</div>
+    <h1>Inventory<br>Management</h1>
+    <p>v1.0.0 · FastAPI</p>
+  </div>
+
+  <div class="nav-section-label">Navigation</div>
+  <div class="nav-item-custom active" onclick="navigate('dashboard')">
+    <i class="bi bi-grid-1x2-fill"></i> Dashboard
+  </div>
+  <div class="nav-item-custom" onclick="navigate('items')">
+    <i class="bi bi-box-seam-fill"></i> Items
+  </div>
+  <div class="nav-item-custom" onclick="navigate('categories')">
+    <i class="bi bi-tags-fill"></i> Categories
+  </div>
+  <div class="nav-item-custom" onclick="navigate('suppliers')">
+    <i class="bi bi-truck"></i> Suppliers
+  </div>
+  <div class="nav-item-custom" onclick="navigate('reports')">
+    <i class="bi bi-bar-chart-fill"></i> Reports
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <div class="user-avatar" id="avatar-letter">U</div>
+      <div class="user-info">
+        <div class="name" id="sidebar-username">User</div>
+        <div class="role">Admin</div>
+      </div>
+      <button class="btn-logout" onclick="logout()" title="Logout"><i class="bi bi-box-arrow-right"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN ══════════════════════════════════════════════════════ -->
+<div id="main" style="display:none">
+  <div class="topbar">
+    <button class="btn-ghost d-md-none" style="padding:6px 10px;font-size:1rem" onclick="document.getElementById('sidebar').classList.toggle('open')"><i class="bi bi-list"></i></button>
+    <div class="page-title" id="topbar-title">Dashboard <span>Overview</span></div>
+    <div class="topbar-actions" id="topbar-actions"></div>
+  </div>
+
+  <div id="content">
+
+    <!-- ── DASHBOARD ─────────────────────────────── -->
+    <div id="page-dashboard" class="page active">
+      <div id="dash-alert"></div>
+      <div class="row g-3 mb-4" id="stat-cards">
+        <div class="col-6 col-lg-3"><div class="stat-card c1"><i class="bi bi-box-seam stat-icon"></i><div class="stat-label">Total Items</div><div class="stat-value" id="stat-total">—</div></div></div>
+        <div class="col-6 col-lg-3"><div class="stat-card c2"><i class="bi bi-layers stat-icon"></i><div class="stat-label">Total Stock</div><div class="stat-value" id="stat-stock">—</div></div></div>
+        <div class="col-6 col-lg-3"><div class="stat-card c3"><i class="bi bi-currency-rupee stat-icon"></i><div class="stat-label">Total Value</div><div class="stat-value" id="stat-value">—</div></div></div>
+        <div class="col-6 col-lg-3"><div class="stat-card c4"><i class="bi bi-exclamation-triangle stat-icon"></i><div class="stat-label">Low Stock</div><div class="stat-value" id="stat-low">—</div></div></div>
+      </div>
+      <div class="row g-3 mb-4">
+        <div class="col-lg-7">
+          <div class="panel">
+            <div class="panel-title"><i class="bi bi-bar-chart"></i> Top Items by Quantity</div>
+            <div class="chart-wrap"><canvas id="chart-bar"></canvas></div>
+          </div>
+        </div>
+        <div class="col-lg-5">
+          <div class="panel">
+            <div class="panel-title"><i class="bi bi-pie-chart"></i> Value Distribution</div>
+            <div class="chart-wrap"><canvas id="chart-pie"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel" id="low-stock-panel" style="display:none">
+        <div class="panel-title" style="color:var(--danger)"><i class="bi bi-exclamation-triangle"></i> Low Stock Alert</div>
+        <div class="table-responsive"><table class="inv-table" id="low-stock-table"></table></div>
+      </div>
+    </div>
+
+    <!-- ── ITEMS ──────────────────────────────────── -->
+    <div id="page-items" class="page">
+      <div id="items-alert"></div>
+      <div class="custom-tabs">
+        <div class="custom-tab active" onclick="itemTab('list')"><i class="bi bi-list-ul"></i> All Items</div>
+        <div class="custom-tab" onclick="itemTab('add')"><i class="bi bi-plus-lg"></i> Add Item</div>
+      </div>
+
+      <!-- List -->
+      <div id="items-list-view">
+        <div class="panel">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="search-wrap flex-grow-1">
+              <i class="bi bi-search"></i>
+              <input type="text" class="form-control" id="item-search" placeholder="Search items..." oninput="filterItems()">
+            </div>
+            <button class="btn-accent" onclick="loadItems()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+          </div>
+          <div class="table-responsive">
+            <table class="inv-table">
+              <thead><tr><th>Item</th><th>Category</th><th>Supplier</th><th>Quantity</th><th>Price</th><th>Value</th><th>Actions</th></tr></thead>
+              <tbody id="items-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add -->
+      <div id="items-add-view" style="display:none">
+        <div class="panel" style="max-width:680px">
+          <div class="panel-title"><i class="bi bi-plus-circle"></i> New Item</div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Item Name *</label>
+              <input type="text" id="ai-name" class="form-control" placeholder="e.g. Steel Bolt M8">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Quantity *</label>
+              <input type="number" id="ai-qty" class="form-control" min="0" value="0">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Description</label>
+              <textarea id="ai-desc" class="form-control" placeholder="Optional details..."></textarea>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Price (₹) *</label>
+              <input type="number" id="ai-price" class="form-control" min="0" step="0.01" value="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Category *</label>
+              <select id="ai-cat" class="form-select"></select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Supplier *</label>
+              <select id="ai-sup" class="form-select"></select>
+            </div>
+            <div class="col-12 d-flex gap-2 pt-2">
+              <button class="btn-accent" onclick="addItem()">Add Item</button>
+              <button class="btn-ghost" onclick="itemTab('list')">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CATEGORIES ─────────────────────────────── -->
+    <div id="page-categories" class="page">
+      <div id="cats-alert"></div>
+      <div class="custom-tabs">
+        <div class="custom-tab active" onclick="catTab('list')"><i class="bi bi-list-ul"></i> All Categories</div>
+        <div class="custom-tab" onclick="catTab('add')"><i class="bi bi-plus-lg"></i> Add Category</div>
+      </div>
+
+      <div id="cats-list-view">
+        <div class="panel">
+          <div class="table-responsive">
+            <table class="inv-table">
+              <thead><tr><th>ID</th><th>Name</th><th>Description</th><th>Actions</th></tr></thead>
+              <tbody id="cats-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="cats-add-view" style="display:none">
+        <div class="panel" style="max-width:480px">
+          <div class="panel-title"><i class="bi bi-tag"></i> New Category</div>
+          <div class="mb-3">
+            <label class="form-label">Name *</label>
+            <input type="text" id="ac-name" class="form-control" placeholder="e.g. Hardware">
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Description</label>
+            <textarea id="ac-desc" class="form-control" placeholder="Optional..."></textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn-accent" onclick="addCategory()">Add Category</button>
+            <button class="btn-ghost" onclick="catTab('list')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SUPPLIERS ──────────────────────────────── -->
+    <div id="page-suppliers" class="page">
+      <div id="sups-alert"></div>
+      <div class="custom-tabs">
+        <div class="custom-tab active" onclick="supTab('list')"><i class="bi bi-list-ul"></i> All Suppliers</div>
+        <div class="custom-tab" onclick="supTab('add')"><i class="bi bi-plus-lg"></i> Add Supplier</div>
+      </div>
+
+      <div id="sups-list-view">
+        <div class="panel">
+          <div class="table-responsive">
+            <table class="inv-table">
+              <thead><tr><th>ID</th><th>Name</th><th>Contact</th><th>Address</th><th>Actions</th></tr></thead>
+              <tbody id="sups-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="sups-add-view" style="display:none">
+        <div class="panel" style="max-width:520px">
+          <div class="panel-title"><i class="bi bi-truck"></i> New Supplier</div>
+          <div class="mb-3">
+            <label class="form-label">Supplier Name *</label>
+            <input type="text" id="as-name" class="form-control" placeholder="Company name">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Contact Info</label>
+            <input type="text" id="as-contact" class="form-control" placeholder="Phone / Email">
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Address</label>
+            <textarea id="as-addr" class="form-control" placeholder="Full address..."></textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn-accent" onclick="addSupplier()">Add Supplier</button>
+            <button class="btn-ghost" onclick="supTab('list')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── REPORTS ─────────────────────────────────── -->
+    <div id="page-reports" class="page">
+      <div class="row g-3 mb-4" id="report-stats">
+        <div class="col-6 col-lg-3"><div class="stat-card c1"><div class="stat-label">Avg Price</div><div class="stat-value" id="rep-avgprice">—</div></div></div>
+        <div class="col-6 col-lg-3"><div class="stat-card c2"><div class="stat-label">Avg Quantity</div><div class="stat-value" id="rep-avgqty">—</div></div></div>
+        <div class="col-6 col-lg-3"><div class="stat-card c3"><div class="stat-label">Total Items</div><div class="stat-value" id="rep-total">—</div></div></div>
+        <div class="col-6 col-lg-3"><div class="stat-card c4"><div class="stat-label">Low Stock</div><div class="stat-value" id="rep-low">—</div></div></div>
+      </div>
+      <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+          <div class="panel">
+            <div class="panel-title"><i class="bi bi-bar-chart"></i> Stock Distribution</div>
+            <div class="chart-wrap"><canvas id="rep-chart-qty"></canvas></div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="panel">
+            <div class="panel-title"><i class="bi bi-currency-rupee"></i> Price vs Quantity</div>
+            <div class="chart-wrap"><canvas id="rep-chart-scatter"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel" id="rep-low-panel" style="display:none">
+        <div class="panel-title" style="color:var(--danger)"><i class="bi bi-exclamation-triangle"></i> Low Stock Items (&lt;10 units)</div>
+        <div class="table-responsive"><table class="inv-table" id="rep-low-table"></table></div>
+      </div>
+      <div class="panel mt-3" id="rep-high-panel">
+        <div class="panel-title"><i class="bi bi-star"></i> High Value Items (Top 10%)</div>
+        <div class="table-responsive"><table class="inv-table" id="rep-high-table"></table></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ══ EDIT MODALS ══════════════════════════════════════════════ -->
+<!-- Item Edit Modal -->
+<div class="modal fade" id="editItemModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Item</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-item-id">
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label">Name *</label><input type="text" id="edit-i-name" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label">Quantity *</label><input type="number" id="edit-i-qty" class="form-control" min="0"></div>
+          <div class="col-12"><label class="form-label">Description</label><textarea id="edit-i-desc" class="form-control"></textarea></div>
+          <div class="col-md-4"><label class="form-label">Price (₹) *</label><input type="number" id="edit-i-price" class="form-control" step="0.01"></div>
+          <div class="col-md-4"><label class="form-label">Category *</label><select id="edit-i-cat" class="form-select"></select></div>
+          <div class="col-md-4"><label class="form-label">Supplier *</label><select id="edit-i-sup" class="form-select"></select></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-danger-soft me-auto" onclick="deleteItem()"><i class="bi bi-trash me-1"></i>Delete</button>
+        <button class="btn-ghost" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn-accent" onclick="updateItem()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Category Edit Modal -->
+<div class="modal fade" id="editCatModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Edit Category</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-cat-id">
+        <div class="mb-3"><label class="form-label">Name *</label><input type="text" id="edit-c-name" class="form-control"></div>
+        <div class="mb-3"><label class="form-label">Description</label><textarea id="edit-c-desc" class="form-control"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn-accent" onclick="updateCategory()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Supplier Edit Modal -->
+<div class="modal fade" id="editSupModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Edit Supplier</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-sup-id">
+        <div class="mb-3"><label class="form-label">Name *</label><input type="text" id="edit-s-name" class="form-control"></div>
+        <div class="mb-3"><label class="form-label">Contact Info</label><input type="text" id="edit-s-contact" class="form-control"></div>
+        <div class="mb-3"><label class="form-label">Address</label><textarea id="edit-s-addr" class="form-control"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn-accent" onclick="updateSupplier()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ── CONFIG ─────────────────────────────────────────────────────
+const API = 'http://127.0.0.1:8000'; // Change to your FastAPI base URL
+let TOKEN = '';
+let USERNAME = '';
+let allItems = [];
+let allCategories = [];
+let allSuppliers = [];
+let barChart, pieChart, repQtyChart, repScatterChart;
+
+// ── UTILS ──────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fmt = n => '₹' + Number(n).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fmtN = n => Number(n).toLocaleString('en-IN');
+
+async function api(method, path, body = null, auth = false) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (auth) opts.headers['Authorization'] = 'Bearer ' + TOKEN;
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(API + path, opts);
+    const d = await r.json();
+    if (r.ok) return { ok: true, data: d };
+    return { ok: false, msg: d.detail || `Error ${r.status}` };
+  } catch (e) {
+    return { ok: false, msg: 'Connection error – is the API running?' };
+  }
+}
+
+function showAlert(zone, type, msg, duration = 4000) {
+  const el = $(zone);
+  if (!el) return;
+  el.innerHTML = `<div class="alert-custom alert-${type}"><i class="bi bi-${type==='success'?'check-circle':type==='error'?'x-circle':'exclamation-triangle'}"></i>${msg}</div>`;
+  if (duration) setTimeout(() => el.innerHTML = '', duration);
+}
+
+// ── AUTH ───────────────────────────────────────────────────────
+function switchAuth(view) {
+  ['login','signup','forgot'].forEach(v => $('view-'+v).style.display = v===view ? '' : 'none');
+  $('auth-alert').innerHTML = '';
+}
+
+async function doLogin() {
+  const u = $('login-user').value.trim(), p = $('login-pass').value;
+  if (!u || !p) return showAlert('auth-alert','error','Enter username and password');
+  $('login-spin').style.display = '';
+  const r = await api('POST', '/auth/login', { username: u, password: p });
+  $('login-spin').style.display = 'none';
+  if (!r.ok) return showAlert('auth-alert','error', r.msg);
+  TOKEN = r.data.access_token;
+  USERNAME = u;
+  bootApp();
+}
+
+async function doSignup() {
+  const u = $('signup-user').value.trim(), p = $('signup-pass').value, c = $('signup-confirm').value;
+  if (!u || !p || !c) return showAlert('auth-alert','error','Fill all fields');
+  if (p !== c) return showAlert('auth-alert','error','Passwords do not match');
+  if (p.length < 6) return showAlert('auth-alert','error','Password must be 6+ chars');
+  const r = await api('POST', '/auth/signup', { username: u, password: p });
+  if (!r.ok) return showAlert('auth-alert','error', r.msg);
+  showAlert('auth-alert','success','Account created! Please login.');
+  switchAuth('login');
+}
+
+async function doForgot() {
+  const u = $('forgot-user').value.trim(), np = $('forgot-new').value, c = $('forgot-confirm').value;
+  if (!u || !np || !c) return showAlert('auth-alert','error','Fill all fields');
+  if (np !== c) return showAlert('auth-alert','error','Passwords do not match');
+  if (np.length < 6) return showAlert('auth-alert','error','Password must be 6+ chars');
+  const r = await api('POST', '/auth/forgot-password', { username: u, new_password: np });
+  if (!r.ok) return showAlert('auth-alert','error', r.msg);
+  showAlert('auth-alert','success','Password reset! Please login.');
+  switchAuth('login');
+}
+
+// ── APP BOOT ───────────────────────────────────────────────────
+function bootApp() {
+  $('auth-screen').style.display = 'none';
+  $('main').style.display = 'flex';
+  $('sidebar-username').textContent = USERNAME;
+  $('avatar-letter').textContent = USERNAME[0].toUpperCase();
+  navigate('dashboard');
+}
+
+function logout() {
+  TOKEN = ''; USERNAME = '';
+  $('auth-screen').style.display = '';
+  $('main').style.display = 'none';
+  $('login-user').value = ''; $('login-pass').value = '';
+  switchAuth('login');
+}
+
+// ── NAVIGATION ─────────────────────────────────────────────────
+const pageTitles = {
+  dashboard: ['Dashboard', 'Overview'],
+  items: ['Items', 'Inventory'],
+  categories: ['Categories', 'Management'],
+  suppliers: ['Suppliers', 'Management'],
+  reports: ['Reports', 'Analytics']
+};
+
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item-custom').forEach(n => n.classList.remove('active'));
+  $('page-'+page).classList.add('active');
+  document.querySelectorAll('.nav-item-custom').forEach(n => {
+    if (n.textContent.trim().toLowerCase().includes(page)) n.classList.add('active');
+  });
+  const t = pageTitles[page] || [page, ''];
+  $('topbar-title').innerHTML = `${t[0]} <span>${t[1]}</span>`;
+
+  if (page === 'dashboard') loadDashboard();
+  else if (page === 'items') { itemTab('list'); loadItems(); loadCatsAndSups(); }
+  else if (page === 'categories') { catTab('list'); loadCategories(); }
+  else if (page === 'suppliers') { supTab('list'); loadSuppliers(); }
+  else if (page === 'reports') loadReports();
+}
+
+// ── DASHBOARD ──────────────────────────────────────────────────
+async function loadDashboard() {
+  const [ir, cr, sr] = await Promise.all([
+    api('GET', '/inventory/items/', null, true),
+    api('GET', '/inventory/categories/', null, true),
+    api('GET', '/inventory/suppliers/', null, true)
+  ]);
+  if (!ir.ok) return showAlert('dash-alert','error', ir.msg);
+
+  const items = ir.data;
+  const totalQty = items.reduce((a, i) => a + i.quantity, 0);
+  const totalVal = items.reduce((a, i) => a + i.quantity * i.price, 0);
+  const lowStock = items.filter(i => i.quantity < 10);
+
+  $('stat-total').textContent = items.length;
+  $('stat-stock').textContent = fmtN(totalQty);
+  $('stat-value').textContent = totalVal >= 1e5 ? '₹' + (totalVal/1e5).toFixed(1) + 'L' : fmt(totalVal);
+  $('stat-low').textContent = lowStock.length;
+
+  renderBarChart(items);
+  renderPieChart(items);
+
+  if (lowStock.length > 0) {
+    $('low-stock-panel').style.display = '';
+    $('low-stock-table').innerHTML = `
+      <thead><tr><th>Name</th><th>Qty</th><th>Price</th></tr></thead>
+      <tbody>${lowStock.map(i => `<tr>
+        <td class="item-name">${i.name}</td>
+        <td><span class="badge-stock badge-low">${i.quantity}</span></td>
+        <td class="price-tag">${fmt(i.price)}</td>
+      </tr>`).join('')}</tbody>`;
+  }
+}
+
+function renderBarChart(items) {
+  const top = [...items].sort((a,b) => b.quantity - a.quantity).slice(0, 8);
+  const ctx = $('chart-bar');
+  if (barChart) barChart.destroy();
+  barChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: top.map(i => i.name.length > 12 ? i.name.slice(0,12)+'…' : i.name),
+      datasets: [{ data: top.map(i => i.quantity), backgroundColor: 'rgba(240,192,64,.75)', borderColor: '#f0c040', borderWidth: 1, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#8888aa', font: { family: 'Space Mono', size: 10 } }, grid: { color: '#2a2a3a' } },
+        y: { ticks: { color: '#8888aa', font: { family: 'Space Mono', size: 10 } }, grid: { color: '#2a2a3a' } }
+      }
+    }
+  });
+}
+
+function renderPieChart(items) {
+  const top = [...items].map(i => ({ ...i, val: i.quantity * i.price })).sort((a,b) => b.val - a.val).slice(0, 7);
+  const colors = ['#f0c040','#40c0f0','#40f090','#f04080','#c040f0','#f08040','#4060f0'];
+  const ctx = $('chart-pie');
+  if (pieChart) pieChart.destroy();
+  pieChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: top.map(i => i.name),
+      datasets: [{ data: top.map(i => i.val), backgroundColor: colors, borderColor: '#16161f', borderWidth: 3 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { color: '#8888aa', font: { size: 11 }, boxWidth: 12 } } }
+    }
+  });
+}
+
+// ── ITEMS ──────────────────────────────────────────────────────
+function itemTab(t) {
+  $('items-list-view').style.display = t === 'list' ? '' : 'none';
+  $('items-add-view').style.display = t === 'add' ? '' : 'none';
+  document.querySelectorAll('#page-items .custom-tab').forEach((el, i) => el.classList.toggle('active', (t==='list' && i===0) || (t==='add' && i===1)));
+}
+
+async function loadItems() {
+  const r = await api('GET', '/inventory/items/', null, true);
+  if (!r.ok) return showAlert('items-alert','error', r.msg);
+  allItems = r.data;
+  renderItems(allItems);
+}
+
+function renderItems(items) {
+  const tb = $('items-tbody');
+  if (!items.length) { tb.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="bi bi-inbox"></i><p>No items found</p></div></td></tr>`; return; }
+  tb.innerHTML = items.map(i => {
+    const val = i.quantity * i.price;
+    const badge = i.quantity < 10 ? 'badge-low' : i.quantity < 30 ? 'badge-med' : 'badge-ok';
+    const catName = allCategories.find(c => c.id === i.category_id)?.name || i.category_id;
+    const supName = allSuppliers.find(s => s.id === i.supplier_id)?.name || i.supplier_id;
+    return `<tr>
+      <td><div class="item-name">${i.name}</div><div class="item-desc">${i.description||''}</div></td>
+      <td>${catName}</td><td>${supName}</td>
+      <td><span class="badge-stock ${badge}">${fmtN(i.quantity)}</span></td>
+      <td class="price-tag">${fmt(i.price)}</td>
+      <td class="price-tag" style="color:var(--success)">${fmt(val)}</td>
+      <td><button class="action-btn" onclick='openEditItem(${JSON.stringify(i)})'><i class="bi bi-pencil"></i></button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterItems() {
+  const q = $('item-search').value.toLowerCase();
+  renderItems(allItems.filter(i => i.name.toLowerCase().includes(q) || (i.description||'').toLowerCase().includes(q)));
+}
+
+async function loadCatsAndSups() {
+  const [cr, sr] = await Promise.all([api('GET','/inventory/categories/',null,true), api('GET','/inventory/suppliers/',null,true)]);
+  if (cr.ok) allCategories = cr.data;
+  if (sr.ok) allSuppliers = sr.data;
+  populateSelects('ai-cat', allCategories);
+  populateSelects('ai-sup', allSuppliers);
+}
+
+function populateSelects(id, arr, selected = null) {
+  const el = $(id);
+  if (!el) return;
+  el.innerHTML = arr.map(x => `<option value="${x.id}" ${x.id===selected?'selected':''}>${x.name}</option>`).join('');
+}
+
+async function addItem() {
+  const name = $('ai-name').value.trim();
+  if (!name) return showAlert('items-alert','error','Item name is required');
+  const data = {
+    name, description: $('ai-desc').value,
+    quantity: parseInt($('ai-qty').value),
+    price: parseFloat($('ai-price').value),
+    category_id: parseInt($('ai-cat').value),
+    supplier_id: parseInt($('ai-sup').value)
+  };
+  const r = await api('POST', '/inventory/items/', data, true);
+  if (!r.ok) return showAlert('items-alert','error', r.msg);
+  showAlert('items-alert','success','Item added!');
+  $('ai-name').value = ''; $('ai-desc').value = ''; $('ai-qty').value = 0; $('ai-price').value = 0;
+  itemTab('list'); loadItems();
+}
+
+function openEditItem(item) {
+  $('edit-item-id').value = item.id;
+  $('edit-i-name').value = item.name;
+  $('edit-i-qty').value = item.quantity;
+  $('edit-i-desc').value = item.description || '';
+  $('edit-i-price').value = item.price;
+  populateSelects('edit-i-cat', allCategories, item.category_id);
+  populateSelects('edit-i-sup', allSuppliers, item.supplier_id);
+  new bootstrap.Modal($('editItemModal')).show();
+}
+
+async function updateItem() {
+  const id = $('edit-item-id').value;
+  const data = {
+    name: $('edit-i-name').value.trim(),
+    description: $('edit-i-desc').value,
+    quantity: parseInt($('edit-i-qty').value),
+    price: parseFloat($('edit-i-price').value),
+    category_id: parseInt($('edit-i-cat').value),
+    supplier_id: parseInt($('edit-i-sup').value)
+  };
+  const r = await api('PUT', `/inventory/items/${id}`, data, true);
+  if (!r.ok) return showAlert('items-alert','error', r.msg);
+  bootstrap.Modal.getInstance($('editItemModal')).hide();
+  showAlert('items-alert','success','Item updated!');
+  loadItems();
+}
+
+async function deleteItem() {
+  if (!confirm('Delete this item permanently?')) return;
+  const id = $('edit-item-id').value;
+  const r = await api('DELETE', `/inventory/items/${id}`, null, true);
+  if (!r.ok) return showAlert('items-alert','error', r.msg);
+  bootstrap.Modal.getInstance($('editItemModal')).hide();
+  showAlert('items-alert','success','Item deleted.');
+  loadItems();
+}
+
+// ── CATEGORIES ─────────────────────────────────────────────────
+function catTab(t) {
+  $('cats-list-view').style.display = t==='list'?'':'none';
+  $('cats-add-view').style.display = t==='add'?'':'none';
+  document.querySelectorAll('#page-categories .custom-tab').forEach((el,i) => el.classList.toggle('active', (t==='list'&&i===0)||(t==='add'&&i===1)));
+}
+
+async function loadCategories() {
+  const r = await api('GET', '/inventory/categories/', null, true);
+  if (!r.ok) return showAlert('cats-alert','error', r.msg);
+  allCategories = r.data;
+  const tb = $('cats-tbody');
+  if (!allCategories.length) { tb.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="bi bi-tags"></i><p>No categories</p></div></td></tr>`; return; }
+  tb.innerHTML = allCategories.map(c => `<tr>
+    <td><span style="font-family:'Space Mono',monospace;color:var(--text-muted);font-size:.8rem">#${c.id}</span></td>
+    <td class="item-name">${c.name}</td>
+    <td style="color:var(--text-secondary);font-size:.85rem">${c.description||'—'}</td>
+    <td><button class="action-btn" onclick='openEditCat(${JSON.stringify(c)})'><i class="bi bi-pencil"></i></button></td>
+  </tr>`).join('');
+}
+
+async function addCategory() {
+  const name = $('ac-name').value.trim();
+  if (!name) return showAlert('cats-alert','error','Name required');
+  const r = await api('POST', '/inventory/categories/', { name, description: $('ac-desc').value }, true);
+  if (!r.ok) return showAlert('cats-alert','error', r.msg);
+  showAlert('cats-alert','success','Category added!');
+  $('ac-name').value = ''; $('ac-desc').value = '';
+  catTab('list'); loadCategories();
+}
+
+function openEditCat(c) {
+  $('edit-cat-id').value = c.id;
+  $('edit-c-name').value = c.name;
+  $('edit-c-desc').value = c.description || '';
+  new bootstrap.Modal($('editCatModal')).show();
+}
+
+async function updateCategory() {
+  const id = $('edit-cat-id').value;
+  const r = await api('PUT', `/inventory/categories/${id}`, { name: $('edit-c-name').value.trim(), description: $('edit-c-desc').value }, true);
+  if (!r.ok) return showAlert('cats-alert','error', r.msg);
+  bootstrap.Modal.getInstance($('editCatModal')).hide();
+  showAlert('cats-alert','success','Category updated!');
+  loadCategories();
+}
+
+// ── SUPPLIERS ──────────────────────────────────────────────────
+function supTab(t) {
+  $('sups-list-view').style.display = t==='list'?'':'none';
+  $('sups-add-view').style.display = t==='add'?'':'none';
+  document.querySelectorAll('#page-suppliers .custom-tab').forEach((el,i) => el.classList.toggle('active', (t==='list'&&i===0)||(t==='add'&&i===1)));
+}
+
+async function loadSuppliers() {
+  const r = await api('GET', '/inventory/suppliers/', null, true);
+  if (!r.ok) return showAlert('sups-alert','error', r.msg);
+  allSuppliers = r.data;
+  const tb = $('sups-tbody');
+  if (!allSuppliers.length) { tb.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i class="bi bi-truck"></i><p>No suppliers</p></div></td></tr>`; return; }
+  tb.innerHTML = allSuppliers.map(s => `<tr>
+    <td><span style="font-family:'Space Mono',monospace;color:var(--text-muted);font-size:.8rem">#${s.id}</span></td>
+    <td class="item-name">${s.name}</td>
+    <td style="color:var(--accent2);font-family:'Space Mono',monospace;font-size:.8rem">${s.contact_info||'—'}</td>
+    <td style="color:var(--text-secondary);font-size:.85rem">${s.address||'—'}</td>
+    <td><button class="action-btn" onclick='openEditSup(${JSON.stringify(s)})'><i class="bi bi-pencil"></i></button></td>
+  </tr>`).join('');
+}
+
+async function addSupplier() {
+  const name = $('as-name').value.trim();
+  if (!name) return showAlert('sups-alert','error','Name required');
+  const r = await api('POST', '/inventory/suppliers/', { name, contact_info: $('as-contact').value, address: $('as-addr').value }, true);
+  if (!r.ok) return showAlert('sups-alert','error', r.msg);
+  showAlert('sups-alert','success','Supplier added!');
+  $('as-name').value = ''; $('as-contact').value = ''; $('as-addr').value = '';
+  supTab('list'); loadSuppliers();
+}
+
+function openEditSup(s) {
+  $('edit-sup-id').value = s.id;
+  $('edit-s-name').value = s.name;
+  $('edit-s-contact').value = s.contact_info || '';
+  $('edit-s-addr').value = s.address || '';
+  new bootstrap.Modal($('editSupModal')).show();
+}
+
+async function updateSupplier() {
+  const id = $('edit-sup-id').value;
+  const r = await api('PUT', `/inventory/suppliers/${id}`, { name: $('edit-s-name').value.trim(), contact_info: $('edit-s-contact').value, address: $('edit-s-addr').value }, true);
+  if (!r.ok) return showAlert('sups-alert','error', r.msg);
+  bootstrap.Modal.getInstance($('editSupModal')).hide();
+  showAlert('sups-alert','success','Supplier updated!');
+  loadSuppliers();
+}
+
+// ── REPORTS ────────────────────────────────────────────────────
+async function loadReports() {
+  const r = await api('GET', '/inventory/items/', null, true);
+  if (!r.ok) return;
+  const items = r.data;
+  if (!items.length) return;
+
+  const avgPrice = items.reduce((a, i) => a + i.price, 0) / items.length;
+  const avgQty = items.reduce((a, i) => a + i.quantity, 0) / items.length;
+  const lowStock = items.filter(i => i.quantity < 10);
+
+  $('rep-avgprice').textContent = fmt(avgPrice);
+  $('rep-avgqty').textContent = Math.round(avgQty);
+  $('rep-total').textContent = items.length;
+  $('rep-low').textContent = lowStock.length;
+
+  // Qty bar
+  const topQty = [...items].sort((a,b) => b.quantity - a.quantity).slice(0, 8);
+  const ctx1 = $('rep-chart-qty');
+  if (repQtyChart) repQtyChart.destroy();
+  repQtyChart = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: topQty.map(i => i.name.slice(0,10)),
+      datasets: [{ data: topQty.map(i => i.quantity), backgroundColor: 'rgba(64,192,240,.7)', borderColor: '#40c0f0', borderWidth: 1, borderRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#8888aa', font: { size: 10 } }, grid: { color: '#2a2a3a' } }, y: { ticks: { color: '#8888aa', font: { size: 10 } }, grid: { color: '#2a2a3a' } } } }
+  });
+
+  // Scatter
+  const ctx2 = $('rep-chart-scatter');
+  if (repScatterChart) repScatterChart.destroy();
+  repScatterChart = new Chart(ctx2, {
+    type: 'scatter',
+    data: {
+      datasets: [{ label: 'Items', data: items.map(i => ({ x: i.quantity, y: i.price, name: i.name })),
+        backgroundColor: 'rgba(240,192,64,.6)', borderColor: '#f0c040', pointRadius: 5 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.raw.name}: qty=${ctx.raw.x}, ₹${ctx.raw.y}` } } },
+      scales: { x: { title: { display: true, text: 'Quantity', color: '#8888aa' }, ticks: { color: '#8888aa' }, grid: { color: '#2a2a3a' } },
+        y: { title: { display: true, text: 'Price (₹)', color: '#8888aa' }, ticks: { color: '#8888aa' }, grid: { color: '#2a2a3a' } } }
+    }
+  });
+
+  // Low stock table
+  if (lowStock.length) {
+    $('rep-low-panel').style.display = '';
+    $('rep-low-table').innerHTML = `<thead><tr><th>Name</th><th>Qty</th><th>Price</th><th>Value</th></tr></thead><tbody>${
+      lowStock.map(i => `<tr><td class="item-name">${i.name}</td><td><span class="badge-stock badge-low">${i.quantity}</span></td><td class="price-tag">${fmt(i.price)}</td><td class="price-tag" style="color:var(--success)">${fmt(i.quantity*i.price)}</td></tr>`).join('')
+    }</tbody>`;
+  }
+
+  // High value table
+  const threshold = items.map(i => i.quantity * i.price).sort((a,b) => b-a)[Math.floor(items.length * 0.1)] || 0;
+  const highVal = items.filter(i => i.quantity * i.price >= threshold).slice(0, 10);
+  $('rep-high-table').innerHTML = `<thead><tr><th>Name</th><th>Qty</th><th>Price</th><th>Total Value</th></tr></thead><tbody>${
+    highVal.map(i => `<tr><td class="item-name">${i.name}</td><td>${fmtN(i.quantity)}</td><td class="price-tag">${fmt(i.price)}</td><td class="price-tag" style="color:var(--success)">${fmt(i.quantity*i.price)}</td></tr>`).join('')
+  }</tbody>`;
+}
+
+// ── ENTER KEY ──────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if ($('view-login').style.display !== 'none') doLogin();
+    else if ($('view-signup').style.display !== 'none') doSignup();
+    else if ($('view-forgot').style.display !== 'none') doForgot();
+  }
+});
+</script>
+</body>
+</html>
