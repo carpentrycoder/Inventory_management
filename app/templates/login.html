@@ -133,6 +133,7 @@
     <div class="tabs">
       <button class="tab active" id="tab-login" onclick="switchTab('login')">Sign in</button>
       <button class="tab" id="tab-signup" onclick="switchTab('signup')">Create account</button>
+      <button class="tab" id="tab-forgot" onclick="switchTab('forgot')">Forgot password</button>
     </div>
 
     <div id="err-box" class="err-box"></div>
@@ -168,20 +169,49 @@
         <div class="spinner" id="signup-spinner"></div>
       </button>
     </div>
+
+    <!-- Forgot Password form -->
+    <div id="form-forgot" style="display:none">
+      <p style="font-size:13px; color:var(--text2); margin-bottom:16px; line-height:1.5;">
+        Enter your email and we'll send you a link to reset your password.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="forgot-email" placeholder="you@company.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">New Password</label>
+        <input class="form-input" type="password" id="forgot-password" placeholder="Min. 8 characters">
+      </div>
+      <button class="submit-btn" id="forgot-btn" onclick="doForgotPassword()">
+        <span>Reset password</span>
+        <div class="spinner" id="forgot-spinner"></div>
+      </button>
+    </div>
   </div>
 </div>
 
 <script>
-const API = 'http://127.0.0.1:8001';
+// Determine API URL - use current origin if available, fallback to localhost
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+  ? `http://127.0.0.1:8000`
+  : window.location.origin;
 
 // Redirect if already logged in
 if (localStorage.getItem('token')) location.href = '/ui/dashboard';
 
 function switchTab(t) {
-  document.getElementById('form-login').style.display  = t === 'login'  ? '' : 'none';
-  document.getElementById('form-signup').style.display = t === 'signup' ? '' : 'none';
-  document.getElementById('tab-login').classList.toggle('active', t === 'login');
-  document.getElementById('tab-signup').classList.toggle('active', t === 'signup');
+  const forms = ['login', 'signup', 'forgot'];
+  const tabs = ['tab-login', 'tab-signup', 'tab-forgot'];
+  
+  forms.forEach(form => {
+    document.getElementById('form-' + form).style.display = form === t ? '' : 'none';
+  });
+  
+  tabs.forEach(tab => {
+    document.getElementById(tab).classList.toggle('active', tab === 'tab-' + t);
+  });
+  
   hideErr();
 }
 
@@ -248,11 +278,37 @@ async function doSignup() {
   } catch(e) { showErr(e.message); setLoading('signup', false); }
 }
 
+async function doForgotPassword() {
+  hideErr();
+  const email = document.getElementById('forgot-email').value.trim();
+  const newPassword = document.getElementById('forgot-password').value;
+  if (!email || !newPassword) { showErr('Please fill in all fields.'); return; }
+  if (newPassword.length < 8) { showErr('Password must be at least 8 characters.'); return; }
+  setLoading('forgot', true);
+  try {
+    const res = await fetch(API + '/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: email, new_password: newPassword })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Password reset failed');
+    showErr('');
+    alert('Password reset successfully! Please sign in with your new password.');
+    switchTab('login');
+  } catch(e) { showErr(e.message); setLoading('forgot', false); }
+}
+
 // Enter key support
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   const loginVisible = document.getElementById('form-login').style.display !== 'none';
-  if (loginVisible) doLogin(); else doSignup();
+  const signupVisible = document.getElementById('form-signup').style.display !== 'none';
+  const forgotVisible = document.getElementById('form-forgot').style.display !== 'none';
+  
+  if (loginVisible) doLogin();
+  else if (signupVisible) doSignup();
+  else if (forgotVisible) doForgotPassword();
 });
 </script>
 </body>

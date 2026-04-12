@@ -61,6 +61,29 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+3. Configure environment variables:
+
+```powershell
+# Create .env file from template
+Copy-Item .env.example .env
+
+# Edit .env with your settings (required for production)
+# Update SECRET_KEY with a strong random value
+```
+
+The `.env` file contains:
+- `SECRET_KEY` - JWT secret (change in production!)
+- `ALGORITHM` - JWT algorithm (default: HS256)
+- `ACCESS_TOKEN_EXPIRE_MINUTES` - Token expiry duration
+- `DB_TYPE` - Database type (sqlite)
+- `DB_NAME` - Database filename
+- `API_HOST` - API server host
+- `API_PORT` - API server port
+- `API_BASE_URL` - API base URL
+- `FRONTEND_BASE_URL` - Frontend URL
+
+
+
 ## Run the Application
 
 Start the FastAPI server:
@@ -154,12 +177,25 @@ And populate sample data with:
 python seed_data.py
 ```
 
+## Authentication Features
+
+The login page (`/ui/login`) provides three main features:
+
+1. **Sign in** - Log in with your email and password
+2. **Create account** - Register a new user account with email and password (min. 8 characters)
+3. **Forgot password** - Reset your password by entering your email and new password
+
+After successful login, your JWT token is stored in `localStorage` and used for subsequent API requests.
+
+Password hashing uses Argon2 for secure storage. Tokens expire after the configured duration (default: 30 minutes).
+
 ## Notes
 
 - CORS is enabled for development (`allow_origins=['*']`). Update for production.
-- Authentication is implemented with JWT tokens and password hashing.
+- Authentication is implemented with JWT tokens and password hashing (Argon2).
 - Charts in the reports page use `Chart.js` via the UI templates.
 - The UI can be accessed through the `/ui` routes rather than the raw API.
+- Environment variables are loaded from `.env` file. See `.env.example` for configuration.
 
 ## License
 
