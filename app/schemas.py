@@ -44,6 +44,7 @@ class ItemBase(BaseModel):
     sku: Optional[str] = None
     quantity: int
     price: float
+    total_price: Optional[float] = None  # Added total_price field
     category_id: Optional[int] = None
     supplier_id: Optional[int] = None
 

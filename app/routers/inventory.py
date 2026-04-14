@@ -87,7 +87,18 @@ async def update_supplier(
 # --------------------------
 @router.post("/items/", response_model=schemas.Item)
 async def create_item(item: schemas.ItemCreate, db: AsyncSession = Depends(get_db)):
-    return await crud.create_item(db=db, item=item)
+    # Calculate total price (price per unit * quantity)
+    total_price = item.price * item.quantity
+    item_data = schemas.ItemCreate(
+        name=item.name,
+        description=item.description,
+        quantity=item.quantity,
+        price=item.price,  # Keep price as price per unit
+        total_price=total_price,  # Add total price
+        category_id=item.category_id,
+        supplier_id=item.supplier_id
+    )
+    return await crud.create_item(db=db, item=item_data)
 
 @router.get("/items/", response_model=List[schemas.Item])
 async def get_items(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
@@ -102,7 +113,18 @@ async def get_item(item_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.put("/items/{item_id}", response_model=schemas.Item)
 async def update_item(item_id: int, item: schemas.ItemCreate, db: AsyncSession = Depends(get_db)):
-    updated_item = await crud.update_item(db=db, item_id=item_id, item_update=item)
+    # Calculate total price (price per unit * quantity)
+    total_price = item.price * item.quantity
+    item_data = schemas.ItemCreate(
+        name=item.name,
+        description=item.description,
+        quantity=item.quantity,
+        price=item.price,  # Keep price as price per unit
+        total_price=total_price,  # Add total price
+        category_id=item.category_id,
+        supplier_id=item.supplier_id
+    )
+    updated_item = await crud.update_item(db=db, item_id=item_id, item_update=item_data)
     if updated_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return updated_item

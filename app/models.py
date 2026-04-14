@@ -42,6 +42,7 @@ class Item(Base):
     sku = Column(String, unique=True, nullable=True)
     quantity = Column(Integer, nullable=False)
     price = Column(Float, nullable=False)
+    total_price = Column(Float, nullable=False)  # Added total_price column
     category_id = Column(Integer, ForeignKey("categories.id"))
     supplier_id = Column(Integer, ForeignKey("suppliers.id"))
     created_at = Column(DateTime, default=datetime.utcnow)

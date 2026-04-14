@@ -145,7 +145,9 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" id="save-btn" onclick="saveItem()">Save item</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveItem(event)">
+        Save item
+      </button>
     </div>
   </div>
 </div>
@@ -376,6 +378,7 @@ function renderTable(items) {
           <th>Name</th>
           <th>Qty</th>
           <th>Price</th>
+          <th>Total Price</th>
           <th>Status</th>
           <th>Actions</th>
         </tr>
@@ -386,6 +389,7 @@ function renderTable(items) {
             <td><b>${esc(it.name)}</b></td>
             <td>${it.quantity}</td>
             <td>₹${it.price.toFixed(2)}</td>
+            <td>₹${(it.quantity * it.price).toFixed(2)}</td>
             <td>${stockBadge(it.quantity)}</td>
             <td>
               <div style="display:flex;gap:6px;">
@@ -463,10 +467,16 @@ function sortBy(key) {
 function populateSelects() {
   const catSel = document.getElementById('item-category');
   const supSel = document.getElementById('item-supplier');
-  catSel.innerHTML = '<option value="">— Select category —</option>' +
-    allCats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
-  supSel.innerHTML = '<option value="">— Select supplier —</option>' +
-    allSuppliers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+
+  if (catSel) {
+    catSel.innerHTML = '<option value="">— Select category —</option>' +
+      allCats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  }
+
+  if (supSel) {
+    supSel.innerHTML = '<option value="">— Select supplier —</option>' +
+      allSuppliers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  }
 }
 
 function populateCategoryFilter() {
@@ -504,7 +514,9 @@ function editItem(id) {
 
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 
-async function saveItem() {
+async function saveItem(event) {
+  event.preventDefault(); // Prevent default form submission
+
   const id = document.getElementById('item-id').value;
   const body = {
     name: document.getElementById('item-name').value.trim(),
@@ -514,9 +526,12 @@ async function saveItem() {
     category_id: parseInt(document.getElementById('item-category').value) || null,
     supplier_id: parseInt(document.getElementById('item-supplier').value) || null,
   };
+
   if (!body.name) { toast('Name is required', 'error'); return; }
+
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
+
   try {
     if (id) {
       await apiFetch('/inventory/items/' + id, { method: 'PUT', body: JSON.stringify(body) });
@@ -525,9 +540,12 @@ async function saveItem() {
       await apiFetch('/inventory/items/', { method: 'POST', body: JSON.stringify(body) });
       toast('Item created');
     }
-    closeModal();
+    closeModal(); // Only close modal after successful save
     loadItems();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+
   btn.disabled = false; btn.textContent = 'Save item';
 }
 
@@ -639,6 +657,10 @@ if (delModalOverlay) {
 }
 
 document.addEventListener('keydown', e => {
+  // Prevent triggering modal when typing in input or textarea
+  const target = e.target;
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
   if (e.key === 'n') {
     e.preventDefault();
     openModal();

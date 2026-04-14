@@ -43,7 +43,9 @@ async def get_suppliers(db: AsyncSession, skip: int = 0, limit: int = 100):
 # ITEM CRUD OPERATIONS
 # --------------------------------------
 async def create_item(db: AsyncSession, item: schemas.ItemCreate):
-    db_item = models.Item(**item.dict())
+    # Calculate total_price before creating the item
+    total_price = item.quantity * item.price
+    db_item = models.Item(**item.dict(), total_price=total_price)
     db.add(db_item)
     await db.commit()
     await db.refresh(db_item)
