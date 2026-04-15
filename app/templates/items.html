@@ -118,30 +118,30 @@
     <h2 class="modal-title" id="modal-title">Add item</h2>
     <input type="hidden" id="item-id">
     <div class="form-group">
-      <label class="form-label">Name</label>
-      <input class="form-input" id="item-name" placeholder="e.g. Wireless Keyboard">
+      <label class="form-label">Name <span style="color: var(--red);">*</span></label>
+      <input class="form-input" id="item-name" placeholder="e.g. Wireless Keyboard" required>
     </div>
     <div class="form-group">
-      <label class="form-label">Description</label>
-      <input class="form-input" id="item-desc" placeholder="Optional description">
+      <label class="form-label">Description <span style="color: var(--red);">*</span></label>
+      <input class="form-input" id="item-desc" placeholder="Enter item description" required>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group">
-        <label class="form-label">Quantity</label>
-        <input class="form-input" id="item-qty" type="number" min="0" placeholder="0">
+        <label class="form-label">Quantity <span style="color: var(--red);">*</span></label>
+        <input class="form-input" id="item-qty" type="number" min="0" placeholder="0" required>
       </div>
       <div class="form-group">
-        <label class="form-label">Price</label>
-        <input class="form-input" id="item-price" type="number" step="0.01" min="0" placeholder="0.00">
+        <label class="form-label">Price <span style="color: var(--red);">*</span></label>
+        <input class="form-input" id="item-price" type="number" step="0.01" min="0" placeholder="0.00" required>
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Category</label>
-      <select class="form-select" id="item-category"></select>
+      <label class="form-label">Category <span style="color: var(--red);">*</span></label>
+      <select class="form-select" id="item-category" required></select>
     </div>
     <div class="form-group">
-      <label class="form-label">Supplier</label>
-      <select class="form-select" id="item-supplier"></select>
+      <label class="form-label">Supplier <span style="color: var(--red);">*</span></label>
+      <select class="form-select" id="item-supplier" required></select>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
@@ -518,16 +518,35 @@ async function saveItem(event) {
   event.preventDefault(); // Prevent default form submission
 
   const id = document.getElementById('item-id').value;
-  const body = {
-    name: document.getElementById('item-name').value.trim(),
-    description: document.getElementById('item-desc').value.trim() || null,
-    quantity: parseInt(document.getElementById('item-qty').value) || 0,
-    price: parseFloat(document.getElementById('item-price').value) || 0,
-    category_id: parseInt(document.getElementById('item-category').value) || null,
-    supplier_id: parseInt(document.getElementById('item-supplier').value) || null,
-  };
+  const name = document.getElementById('item-name').value.trim();
+  const description = document.getElementById('item-desc').value.trim();
+  const quantity = document.getElementById('item-qty').value.trim();
+  const price = document.getElementById('item-price').value.trim();
+  const categoryId = document.getElementById('item-category').value;
+  const supplierId = document.getElementById('item-supplier').value;
 
-  if (!body.name) { toast('Name is required', 'error'); return; }
+  // Validation for empty fields
+  const emptyFields = [];
+  if (!name) emptyFields.push('Name');
+  if (!description) emptyFields.push('Description');
+  if (!quantity || parseInt(quantity) < 0) emptyFields.push('Quantity');
+  if (!price || parseFloat(price) < 0) emptyFields.push('Price');
+  if (!categoryId) emptyFields.push('Category');
+  if (!supplierId) emptyFields.push('Supplier');
+
+  if (emptyFields.length > 0) {
+    toast(`Please fill the required fields: ${emptyFields.join(', ')}`, 'error');
+    return;
+  }
+
+  const body = {
+    name: name,
+    description: description,
+    quantity: parseInt(quantity),
+    price: parseFloat(price),
+    category_id: parseInt(categoryId),
+    supplier_id: parseInt(supplierId),
+  };
 
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';

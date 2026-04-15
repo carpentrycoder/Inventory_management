@@ -47,26 +47,26 @@
     <h2 class="modal-title" id="modal-title">Add supplier</h2>
     <input type="hidden" id="sup-id">
     <div class="form-group">
-      <label class="form-label">Name</label>
-      <input class="form-input" id="sup-name" placeholder="Company name">
+      <label class="form-label">Name <span style="color: var(--red);">*</span></label>
+      <input class="form-input" id="sup-name" placeholder="Company name" required>
     </div>
     <div class="form-group">
-      <label class="form-label">Contact person</label>
-      <input class="form-input" id="sup-contact" placeholder="Full name">
+      <label class="form-label">Contact person <span style="color: var(--red);">*</span></label>
+      <input class="form-input" id="sup-contact" placeholder="Full name" required>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group">
-        <label class="form-label">Email</label>
-        <input class="form-input" id="sup-email" type="email" placeholder="contact@supplier.com">
+        <label class="form-label">Email <span style="color: var(--red);">*</span></label>
+        <input class="form-input" id="sup-email" type="email" placeholder="contact@supplier.com" required>
       </div>
       <div class="form-group">
-        <label class="form-label">Phone</label>
-        <input class="form-input" id="sup-phone" type="tel" placeholder="+91 XXXXX XXXXX">
+        <label class="form-label">Phone <span style="color: var(--red);">*</span></label>
+        <input class="form-input" id="sup-phone" type="tel" placeholder="+91 XXXXX XXXXX" required>
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Address</label>
-      <input class="form-input" id="sup-address" placeholder="Street, City, State">
+      <label class="form-label">Address <span style="color: var(--red);">*</span></label>
+      <input class="form-input" id="sup-address" placeholder="Street, City, State" required>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
@@ -245,14 +245,33 @@ function closeModal() { document.getElementById('modal').classList.remove('open'
 
 async function saveSup() {
   const id = document.getElementById('sup-id').value;
+  const name = document.getElementById('sup-name').value.trim();
+  const contact_person = document.getElementById('sup-contact').value.trim();
+  const email = document.getElementById('sup-email').value.trim();
+  const phone = document.getElementById('sup-phone').value.trim();
+  const address = document.getElementById('sup-address').value.trim();
+
+  // Validation for empty fields
+  const emptyFields = [];
+  if (!name) emptyFields.push('Name');
+  if (!contact_person) emptyFields.push('Contact person');
+  if (!email) emptyFields.push('Email');
+  if (!phone) emptyFields.push('Phone');
+  if (!address) emptyFields.push('Address');
+
+  if (emptyFields.length > 0) {
+    toast(`Please fill the required fields: ${emptyFields.join(', ')}`, 'error');
+    return;
+  }
+
   const body = {
-    name:           document.getElementById('sup-name').value.trim(),
-    contact_person: document.getElementById('sup-contact').value.trim() || null,
-    email:          document.getElementById('sup-email').value.trim() || null,
-    phone:          document.getElementById('sup-phone').value.trim() || null,
-    address:        document.getElementById('sup-address').value.trim() || null,
+    name: name,
+    contact_person: contact_person,
+    email: email,
+    phone: phone,
+    address: address,
   };
-  if (!body.name) { toast('Name required', 'error'); return; }
+
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {

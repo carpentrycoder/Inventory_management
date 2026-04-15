@@ -570,9 +570,13 @@ function renderCharts() {
     });
   }
 
+  // Create lookup map for categories
+  const categoryLookup = {};
+  categories.forEach(c => categoryLookup[c.id] = c.name);
+
   const categoryMap = {};
   items.forEach(i => {
-    const name = categories[i.category_id]?.name || 'Unknown';
+    const name = categoryLookup[i.category_id] || 'Unknown';
     categoryMap[name] = (categoryMap[name] || 0) + (i.quantity || 0);
   });
 
@@ -705,26 +709,34 @@ function renderTable(){
   const maxPrice = Number(document.getElementById('maxPrice').value) || Infinity;
   const filterDate = document.getElementById('filterDate').value;
 
+  // Create lookup maps for categories and suppliers
+  const categoryMap = {};
+  const supplierMap = {};
+  categories.forEach(c => categoryMap[c.id] = c.name);
+  suppliers.forEach(s => supplierMap[s.id] = s.name);
+
   let html = '';
 
   items
     .filter(i => {
       const createdDate = new Date(i.created_at).toISOString().split('T')[0];
+      const catId = String(i.category_id);
+      const supId = String(i.supplier_id);
       return (
         (
           i.name?.toLowerCase().includes(search) ||
           i.description?.toLowerCase().includes(search)
         )
-        && (!categoryFilter || i.category_id == categoryFilter)
-        && (!supplierFilter || i.supplier_id == supplierFilter)
+        && (!categoryFilter || catId === categoryFilter)
+        && (!supplierFilter || supId === supplierFilter)
         && (i.quantity >= minQty && i.quantity <= maxQty)
         && (i.price >= minPrice && i.price <= maxPrice)
         && (!filterDate || createdDate === filterDate)
       );
     })
     .forEach(i => {
-      const cat = categories[i.category_id]?.name || i.category_id;
-      const sup = suppliers[i.supplier_id]?.name || i.supplier_id;
+      const cat = categoryMap[i.category_id] || i.category_id;
+      const sup = supplierMap[i.supplier_id] || i.supplier_id;
       html += `
       <tr>
         <td>${esc(i.name)}</td>

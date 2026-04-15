@@ -52,12 +52,12 @@
     <h2 class="modal-title" id="modal-title">Add category</h2>
     <input type="hidden" id="cat-id">
     <div class="form-group">
-      <label class="form-label">Name</label>
-      <input class="form-input" id="cat-name" placeholder="e.g. Electronics">
+      <label class="form-label">Name <span style="color: var(--red);">*</span></label>
+      <input class="form-input" id="cat-name" placeholder="e.g. Electronics" required>
     </div>
     <div class="form-group">
-      <label class="form-label">Description</label>
-      <input class="form-input" id="cat-desc" placeholder="Optional description">
+      <label class="form-label">Description <span style="color: var(--red);">*</span></label>
+      <input class="form-input" id="cat-desc" placeholder="Enter category description" required>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
@@ -217,12 +217,25 @@ function editCat(id) { openModal(allCats.find(c => c.id === id)); }
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 
 async function saveCat() {
+  const name = document.getElementById('cat-name').value.trim();
+  const description = document.getElementById('cat-desc').value.trim();
   const id = document.getElementById('cat-id').value;
+  
+  // Validation for empty fields
+  const emptyFields = [];
+  if (!name) emptyFields.push('Name');
+  if (!description) emptyFields.push('Description');
+  
+  if (emptyFields.length > 0) {
+    toast(`Please fill the required fields: ${emptyFields.join(', ')}`, 'error');
+    return;
+  }
+  
   const body = {
-    name: document.getElementById('cat-name').value.trim(),
-    description: document.getElementById('cat-desc').value.trim() || null,
+    name: name,
+    description: description,
   };
-  if (!body.name) { toast('Name required', 'error'); return; }
+  
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {

@@ -45,7 +45,9 @@ async def get_suppliers(db: AsyncSession, skip: int = 0, limit: int = 100):
 async def create_item(db: AsyncSession, item: schemas.ItemCreate):
     # Calculate total_price before creating the item
     total_price = item.quantity * item.price
-    db_item = models.Item(**item.dict(), total_price=total_price)
+    item_data = item.dict()
+    item_data.pop('total_price', None)  # Remove total_price if it exists
+    db_item = models.Item(**item_data, total_price=total_price)
     db.add(db_item)
     await db.commit()
     await db.refresh(db_item)
@@ -64,8 +66,11 @@ async def update_item(db: AsyncSession, item_id: int, item_update: schemas.ItemC
     db_item = result.scalar_one_or_none()
     if db_item:
         update_data = item_update.dict(exclude_unset=True)
+        update_data.pop('total_price', None)  # Remove total_price to recalculate
         for key, value in update_data.items():
             setattr(db_item, key, value)
+        # Recalculate total_price based on updated quantity and price
+        db_item.total_price = db_item.quantity * db_item.price
         await db.commit()
         await db.refresh(db_item)
     return db_item

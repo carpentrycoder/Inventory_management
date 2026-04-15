@@ -44,7 +44,6 @@ class ItemBase(BaseModel):
     sku: Optional[str] = None
     quantity: int
     price: float
-    total_price: Optional[float] = None  # Added total_price field
     category_id: Optional[int] = None
     supplier_id: Optional[int] = None
 
@@ -53,6 +52,7 @@ class ItemCreate(ItemBase):
 
 class Item(ItemBase):
     id: int
+    total_price: Optional[float] = None  # Calculated field, returned in response
     created_at: datetime
     updated_at: datetime
 
