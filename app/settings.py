@@ -1,40 +1,69 @@
 # app/settings.py
-from pydantic_settings import BaseSettings
-from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
-    # JWT Configuration
+    # =========================
+    # 🔐 JWT Configuration
+    # =========================
     SECRET_KEY: str = "dev-secret-key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # Database Configuration
+    # =========================
+    # 🗄️ Database Configuration
+    # =========================
+    DATABASE_URL: str | None = None  # ✅ Primary (Render / Neon)
+
+    # Local fallback (ONLY for development)
     DB_TYPE: str = "sqlite"
     DB_NAME: str = "inventory.db"
-    POSTGRES_DB: str = ""
 
-    # API Configuration
-    API_HOST: str = "127.0.0.1"
+    # =========================
+    # 🌐 API Configuration
+    # =========================
+    API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
-    API_BASE_URL: str = "http://127.0.0.1:8000"
 
-    # Frontend Configuration
-    FRONTEND_PORT: int = 8000
-    FRONTEND_BASE_URL: str = "http://127.0.0.1:8000"
+    # =========================
+    # 🎨 Frontend (Optional)
+    # =========================
+    FRONTEND_BASE_URL: str = "http://localhost:8000"
 
+    # =========================
+    # 🔥 Database URL Builder
+    # =========================
     @property
     def SQLALCHEMY_DATABASE_URL(self) -> str:
-        if self.DB_TYPE == "postgres":
-            url = self.POSTGRES_DB.replace("postgresql://", "postgresql+asyncpg://", 1)
-            # Replace sslmode with ssl and remove unsupported params
-            url = url.replace("sslmode=require", "ssl=require")
-            url = url.replace("&channel_binding=require", "")
+        # ✅ PRODUCTION (Render / Neon / Supabase)
+        if self.DATABASE_URL:
+            url = self.DATABASE_URL
+
+            # Fix postgres scheme for SQLAlchemy
+            url = url.replace("postgres://", "postgresql://")
+
+            # 🔥 IMPORTANT FIX for async/sync compatibility
+            url = url.replace("postgresql://", "postgresql+psycopg2://")
+
             return url
-        return f"sqlite+aiosqlite:///./{self.DB_NAME}"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
+        # ✅ LOCAL POSTGRES (rare case)
+        if self.DB_TYPE == "postgres":
+            return f"postgresql+psycopg2://{self.DB_NAME}"
 
+        # ✅ DEFAULT LOCAL SQLITE
+        return f"sqlite:///./{self.DB_NAME}"
+
+    # =========================
+    # ⚙️ Pydantic Config
+    # =========================
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+
+
+# Singleton instance
 settings = Settings()
