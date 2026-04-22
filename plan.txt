@@ -1,21 +1,51 @@
 inventory_system/
+├── alembic.ini                 # Alembic configuration for DB migrations
+├── create_tables.py            # Script to manually create DB tables
+├── disha-inventory.html        # HTML interface (legacy)
+├── JWT_validator.py            # JWT validation utility
+├── LICENSE                     # Project license
+├── plan.txt                    # This project plan
+├── README.md                   # Project documentation
+├── requirements.txt            # Python dependencies
+├── seed_data.py                # Script to populate sample data
+├── Dockerfile                  # Docker container configuration
+├── docker-compose.yml          # Docker Compose for local development
+├── render.yaml                 # Render deployment configuration
+├── .env                        # Environment variables (not committed)
+├── .env.example                # Environment variables template
+├── .gitignore                  # Git ignore rules
 ├── app/
-│   ├── main.py                  # Entry point
-│   ├── models.py                # All DB models
-│   ├── schemas.py               # All Pydantic schemas
-│   ├── crud.py                  # DB logic (can split later if needed)
-│   ├── settings.py              # Environment config using BaseSettings
-│   ├── database.py              # DB engine/session
-│   ├── streamlit_app.py         # For visualization (optional)
-│   ├── auth/                    # 🔐 Authentication logic
-│   │   ├── auth_bearer.py       # JWTBearer dependency
-│   │   ├── auth_handler.py      # JWT encode/decode + hashing
-│   │   └── routes_auth.py       # /auth/signup, /auth/login endpoints
-│   └── routers/
-│       ├── inventory.py         # Inventory CRUD
-│       └── users.py             # (🔒 Admin-only user routes, optional)
-├── requirements.txt             # Dependencies
-└── .env                         # Secrets (DB_USER, DB_PASSWORD, etc.)
+│   ├── main.py                 # FastAPI entry point
+│   ├── models.py               # SQLAlchemy ORM models
+│   ├── schemas.py              # Pydantic request/response schemas
+│   ├── crud.py                 # Database CRUD operations
+│   ├── settings.py             # Environment configuration
+│   ├── database.py             # Database engine and session setup
+│   ├── streamlit_app.py        # Streamlit visualization app
+│   ├── ui_router.py            # Server-side routes for HTML templates
+│   ├── auth/                   # Authentication logic
+│   │   ├── auth_bearer.py      # JWT Bearer token dependency
+│   │   ├── auth_handler.py     # JWT encoding/decoding and password hashing
+│   │   └── routes_auth.py      # Authentication endpoints (/auth/signup, /auth/login)
+│   ├── routers/                # API route handlers
+│   │   ├── inventory.py        # Inventory CRUD endpoints
+│   │   ├── seed.py             # Seed data endpoints
+│   │   └── users.py            # User management endpoints
+│   └── templates/              # Jinja2 HTML templates
+│       ├── base.html           # Base template
+│       ├── categories.html     # Category management UI
+│       ├── dashboard.html      # Main dashboard
+│       ├── items.html          # Item management UI
+│       ├── login.html          # Authentication UI
+│       ├── reports.html        # Reports and analytics UI
+│       └── suppliers.html      # Supplier management UI
+└── migrations/                 # Alembic migration scripts
+    ├── env.py                  # Migration environment
+    ├── README                  # Migration README
+    ├── script.py.mako          # Migration script template
+    └── versions/               # Migration version files
+        ├── dec6f464bd90_add_total_price_column_to_items_table.py
+        └── f13113a59978_add_total_price_column_to_items_table.py
 
 -------------------------------------
 Concept : 
