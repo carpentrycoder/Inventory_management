@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # 🗄️ Database Configuration
     # =========================
     DATABASE_URL: str | None = None  # ✅ Primary (Render / Neon)
+    POSTGRES_DB: str = ""  # Fallback for local .env
 
     # Local fallback (ONLY for development)
     DB_TYPE: str = "sqlite"
@@ -37,23 +38,30 @@ class Settings(BaseSettings):
     @property
     def SQLALCHEMY_DATABASE_URL(self) -> str:
         # ✅ PRODUCTION (Render / Neon / Supabase)
-        if self.DATABASE_URL:
-            url = self.DATABASE_URL
+        db_url = self.DATABASE_URL or self.POSTGRES_DB
+        if db_url:
+            url = db_url
 
             # Fix postgres scheme for SQLAlchemy
             url = url.replace("postgres://", "postgresql://")
 
             # 🔥 IMPORTANT FIX for async/sync compatibility
-            url = url.replace("postgresql://", "postgresql+psycopg2://")
+            url = url.replace("postgresql://", "postgresql+asyncpg://")
+
+            # Handle SSL for Neon
+            if "sslmode=require" in url:
+                url = url.replace("sslmode=require", "ssl=require")
+            if "&channel_binding=require" in url:
+                url = url.replace("&channel_binding=require", "")
 
             return url
 
         # ✅ LOCAL POSTGRES (rare case)
         if self.DB_TYPE == "postgres":
-            return f"postgresql+psycopg2://{self.DB_NAME}"
+            return f"postgresql+asyncpg://{self.DB_NAME}"
 
         # ✅ DEFAULT LOCAL SQLITE
-        return f"sqlite:///./{self.DB_NAME}"
+        return f"sqlite+aiosqlite:///./{self.DB_NAME}"
 
     # =========================
     # ⚙️ Pydantic Config
