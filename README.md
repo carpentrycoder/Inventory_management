@@ -11,7 +11,7 @@ A FastAPI-based Inventory Management System with analytics dashboards, item/cate
 - Purchase and dispatch history APIs
 - Reports page with charts, search, CSV export, and movement analytics
 - User authentication with signup/login and password reset
-- SQLite database persistence (`inventory.db`)
+- Database persistence (SQLite for development, PostgreSQL for production)
 
 ## Project Structure
 
@@ -75,8 +75,9 @@ The `.env` file contains:
 - `SECRET_KEY` - JWT secret (change in production!)
 - `ALGORITHM` - JWT algorithm (default: HS256)
 - `ACCESS_TOKEN_EXPIRE_MINUTES` - Token expiry duration
-- `DB_TYPE` - Database type (sqlite)
-- `DB_NAME` - Database filename
+- `DB_TYPE` - Database type (sqlite or postgres)
+- `DB_NAME` - Database filename (for sqlite)
+- `POSTGRES_DB` - PostgreSQL connection URL (for postgres)
 - `API_HOST` - API server host
 - `API_PORT` - API server port
 - `API_BASE_URL` - API base URL
@@ -161,9 +162,16 @@ The front-end UI is served from Jinja2 templates in `app/templates` and rendered
 
 ## Database
 
-This project uses SQLite by default. The database file is `inventory.db`.
+This project supports both SQLite (for development) and PostgreSQL (for production).
 
-Tables are created automatically at application startup via `app/main.py`.
+- For SQLite: Set `DB_TYPE=sqlite` and `DB_NAME=inventory.db`
+- For PostgreSQL: Set `DB_TYPE=postgres` and `POSTGRES_DB=your_connection_url`
+
+Tables are created via Alembic migrations. Run migrations with:
+
+```bash
+alembic upgrade head
+```
 
 You can also create tables manually with:
 
@@ -188,6 +196,46 @@ The login page (`/ui/login`) provides three main features:
 After successful login, your JWT token is stored in `localStorage` and used for subsequent API requests.
 
 Password hashing uses Argon2 for secure storage. Tokens expire after the configured duration (default: 30 minutes).
+
+## Deployment
+
+### Using Docker
+
+1. Build the Docker image:
+
+```bash
+docker build -t inventory-app .
+```
+
+2. Run the container:
+
+```bash
+docker run -p 8000:8000 --env-file .env inventory-app
+```
+
+### Using Docker Compose
+
+For local development with PostgreSQL:
+
+```bash
+docker-compose up --build
+```
+
+### Production Deployment on Render
+
+1. Push your code to GitHub
+2. Connect your GitHub repo to Render
+3. Create a new Web Service from Docker
+4. Set environment variables in Render dashboard:
+   - `SECRET_KEY`: A strong random key for JWT
+   - `DB_TYPE`: postgres
+   - `POSTGRES_DB`: Your Neon PostgreSQL connection string
+   - `API_HOST`: 0.0.0.0
+   - `API_PORT`: 8000
+   - `FRONTEND_BASE_URL`: Your Render app URL
+5. Deploy!
+
+The app will automatically create database tables on first startup.
 
 ## Notes
 

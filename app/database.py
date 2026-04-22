@@ -9,7 +9,7 @@ DATABASE_URL = settings.SQLALCHEMY_DATABASE_URL
 
 engine = create_async_engine(
     DATABASE_URL,
-    echo=True,
+    echo=False,  # Set to False for production
 )
 
 AsyncSessionLocal = sessionmaker(

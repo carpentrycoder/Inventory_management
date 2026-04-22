@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     # Database Configuration
     DB_TYPE: str = "sqlite"
     DB_NAME: str = "inventory.db"
+    POSTGRES_DB: str = ""
 
     # API Configuration
     API_HOST: str = "127.0.0.1"
@@ -24,6 +25,12 @@ class Settings(BaseSettings):
 
     @property
     def SQLALCHEMY_DATABASE_URL(self) -> str:
+        if self.DB_TYPE == "postgres":
+            url = self.POSTGRES_DB.replace("postgresql://", "postgresql+asyncpg://", 1)
+            # Replace sslmode with ssl and remove unsupported params
+            url = url.replace("sslmode=require", "ssl=require")
+            url = url.replace("&channel_binding=require", "")
+            return url
         return f"sqlite+aiosqlite:///./{self.DB_NAME}"
 
     class Config:

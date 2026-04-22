@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: inventory-management
+    runtime: docker
+    plan: free
+    buildCommand: docker build -t inventory-app .
+    startCommand: docker run -p $PORT:8000 inventory-app
+    envVars:
+      - key: SECRET_KEY
+        value: your-production-secret-key
+      - key: DB_TYPE
+        value: postgres
+      - key: POSTGRES_DB
+        value: your-neon-connection-string
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_PORT
+        value: 8000
+      - key: FRONTEND_BASE_URL
+        value: https://your-render-app-url.onrender.com
