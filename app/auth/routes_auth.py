@@ -13,8 +13,12 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/signup", response_model=schemas.User)
 async def signup(user_data: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(models.User).where(models.User.username == user_data.username))
-    existing_user = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(models.User).where(models.User.username == user_data.username))
+        existing_user = result.scalar_one_or_none()
+    except Exception as e:
+        print(f"Database error during signup: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already registered.")
@@ -31,8 +35,13 @@ async def signup(user_data: schemas.UserCreate, db: AsyncSession = Depends(get_d
 
 @router.post("/login", response_model=schemas.Token)
 async def login(user_data: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(models.User).where(models.User.username == user_data.username))
-    user = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(models.User).where(models.User.username == user_data.username))
+        user = result.scalar_one_or_none()
+    except Exception as e:
+        # Log the error and raise a generic error
+        print(f"Database error during login: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     if not user or not await verify_password(user_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
